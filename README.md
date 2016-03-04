@@ -1,7 +1,7 @@
 IRISMAN
 =======
 
-This project is a fork of Iris Manager originally created by Estwald and D_Skywalk, and modified by aldostools (& at times updated by others).
+This project is a fork of Iris Manager originally created by Estwald and D_Skywalk, and modified by aldostools (& at times updated and contributed by other devs, including Joonie, Habib, Alexander, NzV, Orion, EvilNat, etc.).
 
 IRISMAN includes almost all the features of the original backup manager and the following main features, among many others:
 
