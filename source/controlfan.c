@@ -188,7 +188,7 @@ int get_controlfan_offsets()
         // enables sys_set_leds
         sys386_offset = 0x8000000000009300ULL;
 
-    } else if(firmware == 0x421C) { // firmware 4.21
+    } else if(firmware == 0x421C) { // firmware 4.21 cex
 
         // enables sys_game_get_temperature
         sys383_offset = 0x800000000000C698ULL;
@@ -210,7 +210,7 @@ int get_controlfan_offsets()
         // enables sys_set_leds
         sys386_offset = 0x800000000000A46CULL;
 
-    } else if(firmware == 0x430C) { // firmware 4.30
+    } else if(firmware == 0x430C) { // firmware 4.30 cex
 
         // enables sys_game_get_temperature
         sys383_offset = 0x800000000000C694ULL;
@@ -232,7 +232,7 @@ int get_controlfan_offsets()
         // enables sys_set_leds
         sys386_offset = 0x800000000000A46CULL;
 
-    } else if(firmware == 0x431C) { // firmware 4.31
+    } else if(firmware == 0x431C) { // firmware 4.31 cex
 
         // enables sys_game_get_temperature
         sys383_offset = 0x800000000000C698ULL;
@@ -243,7 +243,7 @@ int get_controlfan_offsets()
         // enables sys_set_leds
         sys386_offset = 0x800000000000A3ECULL;
 
-    } else if(firmware == 0x440C) { // firmware 4.40
+    } else if(firmware == 0x440C) { // firmware 4.40 cex
 
         // enables sys_game_get_temperature
         sys383_offset = 0x800000000000C694ULL;
@@ -254,7 +254,7 @@ int get_controlfan_offsets()
         // enables sys_set_leds
         sys386_offset = 0x800000000000A3ECULL;
 
-    } else if(firmware == 0x441C) { // firmware 4.41
+    } else if(firmware == 0x441C) { // firmware 4.41 cex
 
         // enables sys_game_get_temperature
         sys383_offset = 0x800000000000C698ULL;
@@ -276,7 +276,7 @@ int get_controlfan_offsets()
         // enables sys_set_leds
         sys386_offset = 0x800000000000A46CULL;
 
-    } else if(firmware == 0x446C) { // firmware 4.46
+    } else if(firmware == 0x446C) { // firmware 4.46 cex
 
         // enables sys_game_get_temperature
         sys383_offset = 0x800000000000C698ULL;
@@ -298,7 +298,7 @@ int get_controlfan_offsets()
         // enables sys_set_leds
         sys386_offset = 0x800000000000A46CULL;
 
-    } else if(firmware == 0x450C) { // firmware 4.50
+    } else if(firmware == 0x450C) { // firmware 4.50 cex
 
         // enables sys_game_get_temperature
         sys383_offset = 0x800000000000C694ULL;
@@ -320,7 +320,7 @@ int get_controlfan_offsets()
         // enables sys_set_leds
         sys386_offset = 0x800000000000A46CULL;
 
-    } else if(firmware == 0x453C) { // firmware 4.53
+    } else if(firmware == 0x453C) { // firmware 4.53 cex
 
         // enables sys_game_get_temperature
         sys383_offset = 0x800000000000C698ULL;
@@ -342,7 +342,7 @@ int get_controlfan_offsets()
         // enables sys_set_leds
         sys386_offset = 0x800000000000A46CULL;
 
-    } else if(firmware == 0x455C) { // firmware 4.55
+    } else if(firmware == 0x455C) { // firmware 4.55 cex
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C6A8ULL;
@@ -364,7 +364,7 @@ int get_controlfan_offsets()
        // enables sys_set_leds
        sys386_offset = 0x800000000000A47CULL;
 
-    } else if(firmware == 0x460C) { // firmware 4.60
+    } else if(firmware == 0x460C) { // firmware 4.60 cex
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C6A4ULL;
@@ -386,7 +386,7 @@ int get_controlfan_offsets()
        // enables sys_set_leds
        sys386_offset = 0x800000000000A47CULL;
 
-    } else if((firmware == 0x465C) || (firmware == 0x466C)) { // firmware 4.65-4.66
+    } else if((firmware == 0x465C) || (firmware == 0x466C)) { // firmware 4.65-4.66 cex
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C6A8ULL;
@@ -408,7 +408,7 @@ int get_controlfan_offsets()
        // enables sys_set_leds
        sys386_offset = 0x800000000000A47CULL;
 
-    } else if(firmware == 0x470C) { // firmware 4.70
+    } else if(firmware == 0x470C) { // firmware 4.70 cex
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C6A4ULL;
@@ -430,7 +430,7 @@ int get_controlfan_offsets()
        // enables sys_set_leds
        sys386_offset = 0x800000000000A47CULL;
 
-    } else if((firmware == 0x475C) || (firmware == 0x476C) || (firmware == 0x478C)) { // firmware 4.75-4.78
+    } else if((firmware == 0x475C) || (firmware == 0x476C) || (firmware == 0x478C)) { // firmware 4.75-4.78 cex
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C6A8ULL;
@@ -445,6 +445,28 @@ int get_controlfan_offsets()
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C728ULL;
+       // enables sys_sm_get_fan_policy
+       sys409_offset = 0x8000000000009EB8ULL;
+       // enables sys_sm_set_fan_policy
+       sys389_offset = 0x800000000000A3B4ULL;
+       // enables sys_set_leds
+       sys386_offset = 0x800000000000A47CULL;
+
+    } else if(firmware == 0x480C) { // firmware 4.80 cex
+
+       // enables sys_game_get_temperature
+       sys383_offset = 0x800000000000C6A4ULL;
+       // enables sys_sm_get_fan_policy
+       sys409_offset = 0x8000000000009E38ULL;
+       // enables sys_sm_set_fan_policy
+       sys389_offset = 0x800000000000A334ULL;
+       // enables sys_set_leds
+       sys386_offset = 0x800000000000A3FCULL;
+
+    } else if((firmware == 0x480D) || (firmware == 0x480E)) { // firmware 4.80 dex / deh
+
+       // enables sys_game_get_temperature
+       sys383_offset = 0x800000000000C724ULL;
        // enables sys_sm_get_fan_policy
        sys409_offset = 0x8000000000009EB8ULL;
        // enables sys_sm_set_fan_policy

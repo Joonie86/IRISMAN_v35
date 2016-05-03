@@ -158,6 +158,18 @@
 #include "firmware_symbols_475deh.h"
 #endif
 
+#ifdef CFW_480
+#include "firmware_symbols_480.h"
+#endif
+
+#ifdef CFW_480dex
+#include "firmware_symbols_480dex.h"
+#endif
+
+#ifdef CFW_480deh
+#include "firmware_symbols_480deh.h"
+#endif
+
 #define SYS8_VERSION 0x308
 #define PERM_MODE 0  // 0 -> restricted 1-> original 2-> new for some games
 

@@ -56,6 +56,7 @@ SOURCES		+=  source/payload460  source/payload460dex  source/payload460deh
 SOURCES		+=  source/payload465  source/payload465dex
 SOURCES		+=  source/payload470  source/payload470dex
 SOURCES		+=  source/payload475  source/payload475dex  source/payload475deh
+SOURCES		+=  source/payload480  source/payload480dex  source/payload480deh
 
 DATA		:=  datas
 SHADERS		:=  shaders
@@ -69,6 +70,7 @@ INCLUDES	+=  include/payload460  include/payload460dex  include/payload460deh
 INCLUDES	+=  include/payload465  include/payload465dex
 INCLUDES	+=  include/payload470  include/payload470dex
 INCLUDES	+=  include/payload475  include/payload475dex  include/payload475deh
+INCLUDES	+=  include/payload480  include/payload480dex  include/payload480deh
 
 
 #---------------------------------------------------------------------------------

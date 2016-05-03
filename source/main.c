@@ -87,6 +87,9 @@ u32 snd_inited = 0;
 #include "payload475/payload_475.h"
 #include "payload475dex/payload_475dex.h"
 #include "payload475deh/payload_475deh.h"
+#include "payload480/payload_480.h"
+#include "payload480dex/payload_480dex.h"
+#include "payload480deh/payload_480deh.h"
 
 #include "spu_soundmodule.bin.h" // load SPU Module
 #include "spu_soundlib.h"
@@ -3813,6 +3816,33 @@ s32 main(s32 argc, const char* argv[])
         off_psid  = off_idps2 + 0x18ULL;
         payload_mode = is_payload_loaded_475deh();
     }
+    else if(is_firm_480())
+    {
+        firmware  = 0x480C;
+        //fw_ver    = 0xBB80;
+        off_idps  = 0x80000000003E2E30ULL;
+        off_idps2 = 0x8000000000474AF4ULL;
+        off_psid  = off_idps2 + 0x18ULL;
+        payload_mode = is_payload_loaded_480();
+    }
+    else if(is_firm_480dex())
+    {
+        firmware  = 0x480D;
+        //fw_ver    = 0xBB80;
+        off_idps  = 0x8000000000409930ULL;
+        off_idps2 = 0x800000000049CAF4ULL;
+        off_psid  = off_idps2 + 0x18ULL;
+        payload_mode = is_payload_loaded_480dex();
+    }
+    else if(is_firm_480deh())
+    {
+        firmware  = 0x480E;
+        //fw_ver    = 0xBB80;
+        off_idps  = 0x80000000004326B0ULL;
+        off_idps2 = 0x80000000004C4AF4ULL;
+        off_psid  = off_idps2 + 0x18ULL;
+        payload_mode = is_payload_loaded_480deh();
+    }
 
     if(is_cobra_based()) use_cobra = true;
 
@@ -4438,6 +4468,60 @@ s32 main(s32 argc, const char* argv[])
                     load_payload_475deh(payload_mode);
                     __asm__("sync");
                     sleep(1); /* maybe need it, maybe not */
+
+                    if(!use_cobra && install_mamba)
+                    {
+                        use_mamba = load_ps3_mamba_payload();
+                    }
+                    break;
+                case SKY10_PAYLOAD:
+                    break;
+            }
+            break;
+        case 0x480C:
+            set_bdvdemu_480(payload_mode);
+            switch(payload_mode)
+            {
+                case ZERO_PAYLOAD: //no payload installed
+                    load_payload_480(payload_mode);
+                    __asm__("sync");
+                    sleep(1); /* maybe need it, maybe not */
+
+                    if(!use_cobra && install_mamba)
+                    {
+                        use_mamba = load_ps3_mamba_payload();
+                    }
+                    break;
+                case SKY10_PAYLOAD:
+                    break;
+            }
+            break;
+        case 0x480D:
+            set_bdvdemu_480dex(payload_mode);
+            switch(payload_mode)
+            {
+                case ZERO_PAYLOAD: //no payload installed
+                    load_payload_480dex(payload_mode);
+                    __asm__("sync");
+                    sleep(1); // maybe need it, maybe not
+
+                    if(!use_cobra && install_mamba)
+                    {
+                        use_mamba = load_ps3_mamba_payload();
+                    }
+                    break;
+                case SKY10_PAYLOAD:
+                    break;
+            }
+            break;
+        case 0x480E:
+            set_bdvdemu_480deh(payload_mode);
+            switch(payload_mode)
+            {
+                case ZERO_PAYLOAD: //no payload installed
+                    load_payload_480deh(payload_mode);
+                    __asm__("sync");
+                    sleep(1); // maybe need it, maybe not
 
                     if(!use_cobra && install_mamba)
                     {
