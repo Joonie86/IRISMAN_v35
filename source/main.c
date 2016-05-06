@@ -3829,7 +3829,7 @@ s32 main(s32 argc, const char* argv[])
     {
         firmware  = 0x480D;
         //fw_ver    = 0xBB80;
-        off_idps  = 0x8000000000409930ULL;
+        off_idps  = 0x8000000000409A30ULL;
         off_idps2 = 0x800000000049CAF4ULL;
         off_psid  = off_idps2 + 0x18ULL;
         payload_mode = is_payload_loaded_480dex();
