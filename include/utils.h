@@ -93,6 +93,7 @@ extern int noBDVD;
 
 extern bool use_cobra;
 extern bool use_mamba;
+extern bool is_mamba_v3;
 
 extern char hdd_folder[64];
 extern char bluray_game[64];

@@ -174,7 +174,7 @@ void set_bdvdemu_475(int current_payload)
 {
     lv2_unpatch_bdvdemu = lv2_unpatch_bdvdemu_475;
     lv2_patch_bdvdemu   = lv2_patch_bdvdemu_475;
-    lv2_patch_storage = lv2_patch_storage_475;
+    lv2_patch_storage   = lv2_patch_storage_475;
     lv2_unpatch_storage = lv2_unpatch_storage_475;
 }
 
@@ -264,10 +264,10 @@ void load_payload_475(int mode)
 {
 
 //Remove Lv2 memory protection, NOT needed for REBUG 4.7x
-        lv1poke(0x370F28 + 0, 0x0000000000000001ULL); // Original: 0x0000000000351FD8ULL
-        lv1poke(0x370F28 + 8, 0xE0D251B556C59F05ULL); // Original: 0x3B5B965B020AE21AULL
-        lv1poke(0x370F28 + 16, 0xC232FCAD552C80D7ULL); // Original: 0x7D6F60B118E2E81BULL
-        lv1poke(0x370F28 + 24, 0x65140CD200000000ULL); // Original: 0x315D8B7700000000ULL
+    lv1poke(0x370F28 + 0, 0x0000000000000001ULL); // Original: 0x0000000000351FD8ULL
+    lv1poke(0x370F28 + 8, 0xE0D251B556C59F05ULL); // Original: 0x3B5B965B020AE21AULL
+    lv1poke(0x370F28 + 16, 0xC232FCAD552C80D7ULL); // Original: 0x7D6F60B118E2E81BULL
+    lv1poke(0x370F28 + 24, 0x65140CD200000000ULL); // Original: 0x315D8B7700000000ULL
 
     install_lv2_memcpy();
 
@@ -302,9 +302,11 @@ void load_payload_475(int mode)
     pokeq(0x80000000007EF220ULL, 0ULL);
 
     //patches by deank for webMAN, I left them here just in case someone wants to play with, but basically the same thing with SYS36 patches below
-    /*
+
 			pokeq(0x800000000026714CULL, 0x4E80002038600000ULL ); // fix 8001003C error  Original: 0x4E8000208003026CULL
 			pokeq(0x8000000000267154ULL, 0x7C6307B44E800020ULL ); // fix 8001003C error  Original: 0x3D6000473D201B43ULL
+
+    /*
 			pokeq(0x800000000005658CULL, 0x63FF003D60000000ULL ); // fix 8001003D error  Original: 0x63FF003D419EFFD4ULL
 			pokeq(0x8000000000056650ULL, 0x3FE080013BE00000ULL ); // fix 8001003E error  Original: 0x3FE0800163FF003EULL
 
@@ -329,8 +331,8 @@ void load_payload_475(int mode)
     _poke32(0x56654,  0x3BE00000);            // fix 8001003E error -- 3.55 ok in 0x055F64 "li      %r31, 0"  done
 
     //Fix 0x8001003C error (incorrect version in sys_load_param) - It is present in the new game updates **/
-    _poke(0x267150, 0x386000007C6307B4); //
-    _poke32(0x267150 + 0x10, 0x4E800020);  //
+    //_poke(0x267150, 0x386000007C6307B4); //
+    //_poke32(0x267150 + 0x10, 0x4E800020);  //
 
     /*
         -002c3cf0  f8 01 00 b0 7c 9c 23 78  7c 7d 1b 78 4b d8 aa 1d  |....|.#x|}.xK...|

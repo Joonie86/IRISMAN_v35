@@ -111,7 +111,7 @@ void set_psid_lv2()
         return;
     }
 
-    for(u64 j = 0x8000000000000000ULL; j < 0x8000000000600000ULL; j++)
+    for(u64 j = 0x8000000000000000ULL; j < 0x8000000000600000ULL; j+=4)
     {
         if((peekq(j) == uPSID[0]) && (peekq(j+8) == uPSID[1]))
         {
@@ -144,7 +144,7 @@ void set_console_id_lv2()
         return;
     }
 
-    for(u64 j = 0x8000000000000000ULL; j < 0x8000000000600000ULL; j++)
+    for(u64 j = 0x8000000000000000ULL; j < 0x8000000000600000ULL; j+=4)
     {
         if((peekq(j) == uIDPS[0]) && (peekq(j+8) == uIDPS[1]))
         {

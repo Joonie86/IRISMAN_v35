@@ -4332,7 +4332,7 @@ mount_iso: ;
                     sprintf(TEMP_PATH, PLUGIN_ISO, self_path);
 
                     int r = cobra_load_vsh_plugin(0, TEMP_PATH, plugin_args, 0x10000);
-                    if (r == 0) {fun_exit(); SaveGameList(); exit(0);}
+                    if (r == 0) {SaveGameList(); fun_exit(); exit(0);}
 
                     sprintf(MEM_MESSAGE, "error %X loading sprx_iso plugin", r);
                     DrawDialogOK(MEM_MESSAGE);
@@ -4405,7 +4405,7 @@ mount_iso: ;
             if (ret == SUCCESS)
             {
                 cobra_send_fake_disc_insert_event();
-                {fun_exit(); SaveGameList(); exit(0);}
+                {SaveGameList(); fun_exit(); exit(0);}
             }
 
             for(int o = 1; o < 64; o++) if(files[o]) free(files[o]);
@@ -4468,7 +4468,7 @@ mount_with_mamba:
 
                 sprintf(TEMP_PATH1, PLUGIN_ISO, self_path);
                 int r = cobra_load_vsh_plugin(0, TEMP_PATH1, plugin_args, 0x10000);
-                if (r == 0) {fun_exit(); SaveGameList(); exit(0);}
+                if (r == 0) {SaveGameList(); fun_exit(); exit(0);}
 
                 sprintf(MEM_MESSAGE, "error %X loading sprx_iso plugin", r);
                 DrawDialogOK(MEM_MESSAGE);
@@ -4593,7 +4593,7 @@ int launch_iso_game_mamba(char *path, int mtype)
 
                     sprintf(TEMP_PATH1, PLUGIN_ISO, self_path);
 
-                    if (cobra_load_vsh_plugin(0, TEMP_PATH1, plugin_args, 0x10000) == 0) {fun_exit(); SaveGameList(); exit(0);}
+                    if (cobra_load_vsh_plugin(0, TEMP_PATH1, plugin_args, 0x10000) == 0) {SaveGameList(); fun_exit(); exit(0);}
                 }
                 else if(parts >= MAX_SECTIONS) DrawDialogOKTimer(".ISO is very fragmented", 2000.0f);
 
@@ -4655,7 +4655,7 @@ int launch_iso_game_mamba(char *path, int mtype)
                 if (ret == SUCCESS)
                 {
                     cobra_send_fake_disc_insert_event();
-                    {fun_exit(); SaveGameList(); exit(0);}
+                    {SaveGameList(); fun_exit(); exit(0);}
                 }
 
                 for(int o = 1; o < 64; o++) if(files[o]) free(files[o]);
@@ -4718,7 +4718,7 @@ int launch_iso_game_mamba(char *path, int mtype)
 
                     sprintf(TEMP_PATH1, PLUGIN_ISO, self_path);
                     int r = 0;
-                    if ((r = cobra_load_vsh_plugin(0, TEMP_PATH1, plugin_args, 0x10000)) == 0) {fun_exit(); SaveGameList(); exit(0);}
+                    if ((r = cobra_load_vsh_plugin(0, TEMP_PATH1, plugin_args, 0x10000)) == 0) {SaveGameList(); fun_exit(); exit(0);}
 
                     sprintf(MEM_MESSAGE, "error %X", r);
                     DrawDialogOK(MEM_MESSAGE);
@@ -6349,7 +6349,7 @@ int file_manager(char *pathw1, char *pathw2)
             if(new_pad & BUTTON_START) break;
             else if(new_pad & BUTTON_CIRCLE_)
             {
-                if(DrawDialogYesNo("Exit to XMB?") == YES) {fun_exit(); SaveGameList(); exit(0);}
+                if(DrawDialogYesNo("Exit to XMB?") == YES) {SaveGameList(); fun_exit(); exit(0);}
                 new_pad = 0;
             }
         }
@@ -6590,7 +6590,7 @@ int file_manager(char *pathw1, char *pathw2)
                 {
                     if(exit_option == 1)
                     {
-                        if(DrawDialogYesNo("Exit to XMB?") == YES) {unlink_secure("/dev_hdd0/tmp/wm_request"); fun_exit(); SaveGameList(); exit(0);}
+                        if(DrawDialogYesNo("Exit to XMB?") == YES) {unlink_secure("/dev_hdd0/tmp/wm_request"); SaveGameList(); fun_exit(); exit(0);}
                     }
                     else
                     if(exit_option == 2)
@@ -7251,7 +7251,7 @@ int file_manager(char *pathw1, char *pathw2)
                             {strcpy(path2, "/dev_bdvd\0"); nentries2 = pos2 = sel2 = 0;}
                      }
 
-                     if((mnt_mode == 1) || (old_pad & BUTTON_SELECT)) {fun_exit(); SaveGameList(); exit(0);}
+                     if((mnt_mode == 1) || (old_pad & BUTTON_SELECT)) {SaveGameList(); fun_exit(); exit(0);}
                  }
                  else
                  if(is_dir)
@@ -7270,7 +7270,7 @@ int file_manager(char *pathw1, char *pathw2)
                      else
                         {strcpy(path2, "/dev_bdvd\0"); nentries2 = pos2 = sel2 = 0;}
 
-                     if(mnt_mode == 1 || (old_pad & BUTTON_SELECT)) {fun_exit(); SaveGameList(); exit(0);}
+                     if(mnt_mode == 1 || (old_pad & BUTTON_SELECT)) {SaveGameList(); fun_exit(); exit(0);}
                  }
                  else
                  {
@@ -7729,7 +7729,7 @@ int file_manager(char *pathw1, char *pathw2)
                                 unlink_secure(TEMP_PATH1);
                                 launch_iso_build(TEMP_PATH1, TEMP_PATH2, false);
 
-                                {fun_exit(); SaveGameList(); exit(0);}
+                                {SaveGameList(); fun_exit(); exit(0);}
                             }
 
                             if(!is_ntfs_path(path1))
@@ -7801,7 +7801,7 @@ int file_manager(char *pathw1, char *pathw2)
                                     launch_iso_build(TEMP_PATH1, TEMP_PATH2, false);
                                 }
 
-                                {fun_exit(); SaveGameList(); exit(0);}
+                                {SaveGameList(); fun_exit(); exit(0);}
                             }
                             continue;
                         }
@@ -8344,7 +8344,7 @@ int file_manager(char *pathw1, char *pathw2)
                                 unlink_secure(TEMP_PATH1);
                                 launch_iso_build(TEMP_PATH1, TEMP_PATH2, false);
 
-                                {fun_exit(); SaveGameList(); exit(0);}
+                                {SaveGameList(); fun_exit(); exit(0);}
                             }
 
                             if(!is_ntfs_path(path2))
@@ -8416,7 +8416,7 @@ int file_manager(char *pathw1, char *pathw2)
                                     launch_iso_build(TEMP_PATH1, TEMP_PATH2, false);
                                 }
 
-                                {fun_exit(); SaveGameList(); exit(0);}
+                                {SaveGameList(); fun_exit(); exit(0);}
                             }
                             continue;
                         }

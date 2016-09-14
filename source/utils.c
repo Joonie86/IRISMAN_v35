@@ -1348,7 +1348,7 @@ int patch_exe_error_09(char *path_exe)
     if(is_ntfs_path(path_exe)) return 0;
 
     u16 fw_421 = 42100;
-    u16 fw_478 = 47800;
+    u16 fw_480 = 48000;
     int offset_fw;
     s32 ret;
     u64 bytesread = 0;
@@ -1360,7 +1360,7 @@ int patch_exe_error_09(char *path_exe)
 
     sysLv2FsChmod(path_exe, FS_S_IFMT | 0777);
 
-    if(firmware >= 0x478C) return SUCCESS;
+    if(firmware >= 0x480C) return SUCCESS;
 
     // open self/sprx and changes the fw version
     ret = sysLv2FsOpen( path_exe, SYS_O_RDWR, &file, 0, NULL, 0 );
@@ -1390,14 +1390,14 @@ int patch_exe_error_09(char *path_exe)
 
                     if(retried == 0 && (ver % 100) > 0) {offset_fw = (offset_fw==0x258) ? 0x278 : 0; retried = 1; goto retry_offset_exe;}
 
-                    if(ret == SUCCESS && bytesread == 0x2ULL && (ver >= 34000 && ver <= fw_478))
+                    if(ret == SUCCESS && bytesread == 0x2ULL && (ver >= 34000 && ver <= fw_480))
                     {
                         ret = sysLv2FsLSeek64( file, (u64) offset_fw, 0, &pos );
                         u16 cur_firm = ((firmware>>12) & 0xF) * 10000 + ((firmware>>8) & 0xF) * 1000 + ((firmware>>4) & 0xF) * 100;
 
                         if(ret == SUCCESS && ver > cur_firm)
                         {
-                            if(ver > fw_421 && (firmware >= 0x421C && firmware < 0x478C))
+                            if(ver > fw_421 && (firmware >= 0x421C && firmware < 0x480C))
                             {
                                 sysLv2FsWrite( file, &cur_firm, 0x2, &written );
                                 flag = 1; //patch applied
@@ -2517,21 +2517,21 @@ int fill_entries_from_device(char *path, t_directories *list, int *max, u32 flag
                 fill_iso_entries_from_device(file, flag | PS2_CLASSIC_FLAG, list, max, 0);
             }
 
-            if(retro_mode == RETRO_ALL || retro_mode == RETRO_PS2 || retro_mode == RETRO_PSALL)
+            if(use_cobra || is_mamba_v3)
             {
-                if(!strncmp(file, "/dev_hdd0", 9))
+                if(retro_mode == RETRO_ALL || retro_mode == RETRO_PS2 || retro_mode == RETRO_PSALL)
                 {
-                    file[n] = 0; strcat(file, "/PS2ISO\0");
-                    fill_iso_entries_from_device(file, flag | PS2_FLAG, list, max, 0);
+                    if(!strncmp(file, "/dev_hdd0", 9))
+                    {
+                        file[n] = 0; strcat(file, "/PS2ISO\0");
+                        fill_iso_entries_from_device(file, flag | PS2_FLAG, list, max, 0);
 
-                    file[n] = 0; strcat(file, "/PS2ISO [auto]\0");
-                    fill_iso_entries_from_device(file, flag | PS2_FLAG, list, max, 0);
+                        file[n] = 0; strcat(file, "/PS2ISO [auto]\0");
+                        fill_iso_entries_from_device(file, flag | PS2_FLAG, list, max, 0);
+                    }
                 }
-            }
 
-            if(!use_mamba)
-            {
-                if(!use_mamba && (retro_mode == RETRO_ALL || retro_mode == RETRO_PSP || retro_mode == RETRO_PSALL))
+                if(retro_mode == RETRO_ALL || retro_mode == RETRO_PSP || retro_mode == RETRO_PSALL)
                 {
                     if(strncmp(file, "/dev_hdd0", 9))
                     {

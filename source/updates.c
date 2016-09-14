@@ -281,8 +281,9 @@ static int download_update(char *url, char *file, int mode, u64 *size)
     ret = httpResponseGetStatusCode(transID, &code);
     if (ret < 0) {if(show_http_errors) DrawDialogOKTimer("Error httpResponseGetStatusCode", 2000.0f); goto err;}
 
-    if (code == 404) {ret = -4; goto err;}
-    if (code == 403) {ret = -4; goto err;}
+    //if (code == 404) {ret = -4; goto err;}
+    //if (code == 403) {ret = -4; goto err;}
+    if (code >= 400 && code < 600) {ret = -4; goto err;} // 4xx (client error) / 5xx (server error)
 
     ret = httpResponseGetContentLength(transID, &length);
     if (ret < 0) {
@@ -498,8 +499,9 @@ int download_file(char *url, char *file, int mode, u64 *size)
     ret = httpResponseGetStatusCode(transID, &code);
     if (ret < 0) {if(show_http_errors) DrawDialogOKTimer("Error httpResponseGetStatusCode", 2000.0f); goto err;}
 
-    if (code == 404) {ret = -4; goto err;}
-    if (code == 403) {ret = -4; goto err;}
+    //if (code == 404) {ret = -4; goto err;}
+    //if (code == 403) {ret = -4; goto err;}
+    if (code >= 400 && code < 600) {ret = -4; goto err;} // 4xx (client error) / 5xx (server error)
 
     ret = httpResponseGetContentLength(transID, &length);
 

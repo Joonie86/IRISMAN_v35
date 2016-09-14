@@ -330,6 +330,12 @@ skip_the_load:
 }
 
 
+static u64 lv1poke(u64 addr, u64 value)
+{
+    lv2syscall2(9, (u64) addr, (u64) value);
+    return_to_user_prog(u64);
+}
+
 bool load_ps3_mamba_payload()
 {
     //DrawDialogOK("Label1");
@@ -340,6 +346,17 @@ bool load_ps3_mamba_payload()
         DrawDialogOK("syscall_base is empty!");
         return false;
     }
+
+    //////////////////////// Mamba 3.x Fix (Thanks to Zar)
+    {
+        u64 vsh_type = 0x666ULL;
+
+        if(file_exists("/dev_flash/vsh/module/vsh.self.cexsp") == 0) vsh_type = 0xDEULL; else
+        if(file_exists("/dev_flash/vsh/module/vsh.self.dexsp") == 0) vsh_type = 0xCEULL;
+
+        lv1poke(0ULL, vsh_type);
+    }
+    ////////////////////////
 
     char payload_file[MAXPATHLEN];
     sprintf(payload_file, "%s/USRDIR/mamba/mamba_%X.lz.bin", self_path, firmware);
@@ -375,6 +392,8 @@ bool load_ps3_mamba_payload()
         free(addr);
         return false;
     }
+
+    is_mamba_v3 = (file_size > 33000);
 
     zlib_decompress((char *) mamba_payload, (char *) addr, file_size, &out_size);
 

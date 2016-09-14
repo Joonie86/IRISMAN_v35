@@ -87,6 +87,9 @@ u32 snd_inited = 0;
 #include "payload475/payload_475.h"
 #include "payload475dex/payload_475dex.h"
 #include "payload475deh/payload_475deh.h"
+#include "payload480/payload_480.h"
+#include "payload480dex/payload_480dex.h"
+#include "payload480deh/payload_480deh.h"
 
 #include "spu_soundmodule.bin.h" // load SPU Module
 #include "spu_soundlib.h"
@@ -154,6 +157,7 @@ u32 snd_inited = 0;
 
 bool use_cobra = false;
 bool use_mamba = false; // cobra app version
+bool is_mamba_v3 = false;
 bool unsupported_cfw = false;
 
 bool install_mamba = true;
@@ -2036,6 +2040,7 @@ void fun_exit()
 
     ioPadEnd();
 
+
 #ifdef SHOWTIME_LOADER
     #define FS_S_IFMT 0170000
 
@@ -2086,7 +2091,7 @@ void fun_exit()
     if(restore_syscall8[0]) sys8_pokeinstr(restore_syscall8[0], restore_syscall8[1]);
 
 #ifdef LOADER_MODE
-#ifdef PRXMAMBA_LOADER
+  #ifdef PRXMAMBA_LOADER
     if(file_exists("/dev_hdd0/game/IRISMAN01/USRDIR/prxloader.self"))
     {
         sysProcessExitSpawn2("/dev_hdd0/game/IRISMAN01/USRDIR/prxloader.self", NULL, NULL, NULL, 0, 3071, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
@@ -2094,7 +2099,7 @@ void fun_exit()
     }
 
     sysProcessExitSpawn2("/dev_hdd0/game/IRISMAN00/USRDIR/prxloader.self", NULL, NULL, NULL, 0, 3071, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-#endif
+  #endif
 #else
     if(game_cfg.direct_boot == 555 && use_cobra)
         sysProcessExitSpawn2("/dev_bdvd/PS3_GAME/USRDIR/EBOOT.BIN", NULL, NULL, NULL, 0, 3071, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
@@ -2104,22 +2109,29 @@ void fun_exit()
     if(bAutoLaunchPrxLoader && use_mamba)
         sysProcessExitSpawn2("/dev_hdd0/game/IRISMAN00/USRDIR/prxloader.self", NULL, NULL, NULL, 0, 3071, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
 #endif
+}
 
+static void exit_to_xmb(void)
+{
+    fun_exit();
+    exit(0);
 }
 
 static void sys_callback(uint64_t status, uint64_t param, void* userdata) {
 
-     switch (status) {
-		case SYSUTIL_EXIT_GAME:
+     switch (status)
+     {
+       case SYSUTIL_EXIT_GAME:
 
-			fun_exit();
-			sysProcessExit(1);
-			break;
+            SaveGameList();
+            fun_exit();
+
+            sysProcessExit(1);
+            break;
 
        default:
-		   break;
-
-	}
+            break;
+     }
 }
 
 #ifndef LOADER_MODE
@@ -2633,6 +2645,8 @@ void init_music(int select_song)
             }
             closedir(dir);
         }
+
+        if(MAX_SONGS == 0) return;
     }
 
     if(select_song < 0 && (manager_cfg.opt_flags & OPTFLAGS_PLAYMUSIC))
@@ -3080,7 +3094,7 @@ void parse_mygames_xml()
         char *pos = strstr(directories[ndirectories].path_name, "?");
         if(pos) *pos = 0;
 
-        sprintf(directories[ndirectories].title, "%s", str_replace(get_filename(directories[ndirectories].path_name), "%20", " "));
+        sprintf(directories[ndirectories].title, "%s", str_replace(str_replace(str_replace(str_replace(str_replace(get_filename(directories[ndirectories].path_name), "%20", " "), "%26", "&"), "%3A", ":"), "%3F", "?"), "%2B", "+"));
 
         directories[ndirectories].title[63] = 0;
 
@@ -3114,8 +3128,8 @@ void read_settings()
     char InstallMamba[2] = "1";
     char LoadMambaAndQuit[2] = "0";
 
-    spoof_version  = 0x478;
-    spoof_revision = 66041;
+    spoof_version  = 0x480;
+    spoof_revision = 66412;
 
     // set default values
     sprintf(covers_path, "%s/USRDIR/covers/", MM_PATH);
@@ -3464,7 +3478,6 @@ s32 main(s32 argc, const char* argv[])
 
     if (strstr(self_path, "/BLES80608")) sprintf(self_path, "/dev_hdd0/game/IRISMAN00");
 
-
     if(is_firm_341())
     {
         firmware  = 0x341C;
@@ -3812,6 +3825,33 @@ s32 main(s32 argc, const char* argv[])
         off_idps2 = 0x80000000004C4AF4ULL;
         off_psid  = off_idps2 + 0x18ULL;
         payload_mode = is_payload_loaded_475deh();
+    }
+    else if(is_firm_480())
+    {
+        firmware  = 0x480C;
+        //fw_ver    = 0xBB80;
+        off_idps  = 0x80000000003E2E30ULL;
+        off_idps2 = 0x8000000000474AF4ULL;
+        off_psid  = off_idps2 + 0x18ULL;
+        payload_mode = is_payload_loaded_480();
+    }
+    else if(is_firm_480dex())
+    {
+        firmware  = 0x480D;
+        //fw_ver    = 0xBB80;
+        off_idps  = 0x8000000000409A30ULL;
+        off_idps2 = 0x800000000049CAF4ULL;
+        off_psid  = off_idps2 + 0x18ULL;
+        payload_mode = is_payload_loaded_480dex();
+    }
+    else if(is_firm_480deh())
+    {
+        firmware  = 0x480E;
+        //fw_ver    = 0xBB80;
+        off_idps  = 0x80000000004326B0ULL;
+        off_idps2 = 0x80000000004C4AF4ULL;
+        off_psid  = off_idps2 + 0x18ULL;
+        payload_mode = is_payload_loaded_480deh();
     }
 
     if(is_cobra_based()) use_cobra = true;
@@ -4448,6 +4488,60 @@ s32 main(s32 argc, const char* argv[])
                     break;
             }
             break;
+        case 0x480C:
+            set_bdvdemu_480(payload_mode);
+            switch(payload_mode)
+            {
+                case ZERO_PAYLOAD: //no payload installed
+                    load_payload_480(payload_mode);
+                    __asm__("sync");
+                    sleep(1); /* maybe need it, maybe not */
+
+                    if(!use_cobra && install_mamba)
+                    {
+                        use_mamba = load_ps3_mamba_payload();
+                    }
+                    break;
+                case SKY10_PAYLOAD:
+                    break;
+            }
+            break;
+        case 0x480D:
+            set_bdvdemu_480dex(payload_mode);
+            switch(payload_mode)
+            {
+                case ZERO_PAYLOAD: //no payload installed
+                    load_payload_480dex(payload_mode);
+                    __asm__("sync");
+                    sleep(1); // maybe need it, maybe not
+
+                    if(!use_cobra && install_mamba)
+                    {
+                        use_mamba = load_ps3_mamba_payload();
+                    }
+                    break;
+                case SKY10_PAYLOAD:
+                    break;
+            }
+            break;
+        case 0x480E:
+            set_bdvdemu_480deh(payload_mode);
+            switch(payload_mode)
+            {
+                case ZERO_PAYLOAD: //no payload installed
+                    load_payload_480deh(payload_mode);
+                    __asm__("sync");
+                    sleep(1); // maybe need it, maybe not
+
+                    if(!use_cobra && install_mamba)
+                    {
+                        use_mamba = load_ps3_mamba_payload();
+                    }
+                    break;
+                case SKY10_PAYLOAD:
+                    break;
+            }
+            break;
         default:
             tiny3d_Init(1024*1024);
             ioPadInit(7);
@@ -4517,10 +4611,10 @@ s32 main(s32 argc, const char* argv[])
          {
              set_install_pkg = true;
              game_cfg.direct_boot = 0;
-             fun_exit(0);
+             fun_exit();
          }
          else
-             exit(0);
+             exit_to_xmb();
     }
 
 
@@ -5013,8 +5107,8 @@ s32 main(s32 argc, const char* argv[])
         autolaunch = LAUNCHMODE_STARTED;
         load_gamecfg(autolaunch);
         gui_control();
-        fun_exit();
-        exit(0);
+
+        exit_to_xmb();
     }
 #endif
 
@@ -5102,12 +5196,12 @@ s32 main(s32 argc, const char* argv[])
                     // load PSX options
                     LoadPSXOptions(filename);
 
-                    if(psx_iso_prepare(filename, directories[autolaunch].title, NULL) == 0)  exit(0);
+                    if(psx_iso_prepare(filename, directories[autolaunch].title, NULL) == 0)  exit_to_xmb();
 
                     psx_launch();
                 }
 
-                exit(0);
+                exit_to_xmb();
             }
         }
     }
@@ -5148,7 +5242,7 @@ s32 main(s32 argc, const char* argv[])
         {
             if(get_net_status() == SUCCESS) auto_ftp();
             file_manager(NULL, NULL);
-            if(bFileManager) {fun_exit(); exit(0);}
+            if(bFileManager) exit_to_xmb();
         }
 
         frame_count = 0xFF; // force display temp
@@ -5911,7 +6005,7 @@ skip_refresh:
             get_last_selected_game(false);
 
             ps3pad_read();
-            if((new_pad | old_pad) & (BUTTON_L1 | BUTTON_CROSS_ | BUTTON_R1)) {autolaunch = currentgamedir; gui_control(); fun_exit(); exit(0);}
+            if((new_pad | old_pad) & (BUTTON_L1 | BUTTON_CROSS_ | BUTTON_R1)) {autolaunch = currentgamedir; gui_control(); exit_to_xmb();}
 
             autolaunch = LAUNCHMODE_CHECKED;
         }
@@ -5946,9 +6040,9 @@ skip_refresh:
             {
                 if(favourites.list[n].index >= 0)
                 {
-                    if(favourites.list[n].title_id[0] == 0) exit(0);
-                    if(favourites.list[n].index >= ndirectories) exit(0);
-                    if(directories[favourites.list[n].index].flags == 0) exit(0);
+                    if(favourites.list[n].title_id[0] == 0) exit_to_xmb();
+                    if(favourites.list[n].index >= ndirectories) exit_to_xmb();
+                    if(directories[favourites.list[n].index].flags == 0) exit_to_xmb();
                 }
             }
             for (; n < MAX_FAVORITES; n++) favourites.list[n].index = -1;
@@ -6082,7 +6176,7 @@ skip_refresh:
 
 #endif
 
-    fun_exit(0);
+    fun_exit();
     return SUCCESS;
 }
 
@@ -8163,15 +8257,15 @@ int gui_control()
 
                 if (old_pad & (BUTTON_SELECT))
                 {
-                    if(DrawDialogYesNo(language[DRAWSCREEN_RESTART]) == YES) {SaveGameList(); set_install_pkg = true; game_cfg.direct_boot = 0; fun_exit(0);}
+                    if(DrawDialogYesNo(language[DRAWSCREEN_RESTART]) == YES) {SaveGameList(); set_install_pkg = true; game_cfg.direct_boot = 0; fun_exit();}
                 }
                 if (old_pad & (BUTTON_R2))
                 {
-                    if(DrawDialogYesNo(language[DRAWSCREEN_SHUTDOWN]) == YES) {SaveGameList(); set_install_pkg = bAutoLaunchPrxLoader = false; fun_exit(0); sys_shutdown();}
+                    if(DrawDialogYesNo(language[DRAWSCREEN_SHUTDOWN]) == YES) {SaveGameList(); set_install_pkg = bAutoLaunchPrxLoader = false; fun_exit(); sys_shutdown();}
                 }
                 else
                 {
-                    if(DrawDialogYesNo(language[DRAWSCREEN_EXITXMB]) == YES) {SaveGameList(); exit_program = true; fun_exit(0); return r;}
+                    if(DrawDialogYesNo(language[DRAWSCREEN_EXITXMB]) == YES) {SaveGameList(); exit_program = true; fun_exit(); return r;}
                 }
 
                 tiny3d_Flip();
@@ -8498,9 +8592,12 @@ autolaunch_proc:
                     // Mount Network Game through webMAN
                     if(bAllowNetGames && get_net_status() == SUCCESS)
                     {
-                        sprintf(tmp_path, "http://localhost/mount_ps3/%s", directories[currentgamedir].path_name);
-                        download_file(str_replace(tmp_path, " ", "%20"), NULL, 0, NULL);
-                        exit(0);
+                        sprintf(tmp_path, "http://localhost/mount_ps3/%s", str_replace(str_replace(str_replace(str_replace(str_replace(directories[currentgamedir].path_name, " ", "%20"), "%26", "&"), "%3A", ":"), "%3F", "?"), "%2B", "+"));
+                        download_file(tmp_path, NULL, 0, NULL);
+
+                        SaveGameList();
+
+                        exit_to_xmb();
                     }
 
                     return r;
@@ -9073,7 +9170,8 @@ autolaunch_proc:
                         build_sys8_path_table();
                         set_device_wakeup_mode(bdvd_is_usb ? 0xFFFFFFFF : directories[currentgamedir].flags);
                         game_cfg.direct_boot = 0;
-                        exit(0);
+
+                        exit_to_xmb();
 
                         //////////////
                         skip_homebrew: ;
@@ -9248,7 +9346,7 @@ autolaunch_proc:
             if(strncmp(directories[indx].title_id, NETHOST, 9) == SUCCESS)
             {
                 sprintf(temp_buffer, (strncmp(directories[indx].path_name, "net", 3) ? "%s\n\nPath:\n%s" : "%s\n\nNetwork Path:\n%s"),
-                                                                                       directories[indx].title, str_replace(directories[indx].path_name, "%20", " "));
+                                                                                       directories[indx].title, str_replace(str_replace(str_replace(str_replace(str_replace(directories[indx].path_name, "%20", " "), "%26", "&"), "%3A", ":"), "%3F", "?"), "%2B", "+"));
                 DrawDialogOKTimer(temp_buffer, 5000.0f);
                 return r;
             }
@@ -10137,10 +10235,11 @@ void mount_iso_game()
     }
 
 mount_game:
-    launch_iso_game(directories[currentgamedir].path_name, -1);
+    SaveGameList();
 
-    fun_exit();
-    exit(0);
+    launch_iso_game(directories[currentgamedir].path_name, DETECT_EMU_TYPE);
+
+    exit_to_xmb();
 }
 
 #if defined(LOADER_MODE) || defined(LASTPLAY_LOADER)
@@ -12406,7 +12505,7 @@ exit_gbloptions:
 
                         sprintf(temp_buffer, "Mounted /net_host0/PKG as /dev_bdvd\n\n%s", language[DRAWSCREEN_EXITXMB]);
                         if(DrawDialogYesNo(temp_buffer) == YES)
-                            exit(0);
+                            exit_to_xmb();
                         else
                             file_manager("/dev_bdvd", NULL);
                     }
@@ -12435,7 +12534,7 @@ exit_gbloptions:
 
                         sprintf(temp_buffer, "Mounted /net_host0/PKG as /dev_bdvd\n\n%s", language[DRAWSCREEN_EXITXMB]);
                         if(DrawDialogYesNo(temp_buffer) == YES)
-                            exit(0);
+                            exit_to_xmb();
                         else
                             file_manager("/dev_bdvd", NULL);
                     }
@@ -12475,6 +12574,7 @@ exit_gbloptions:
                     }
                     break;
                   case 6: // Setup webMAN
+                    SaveGameList();
                     fun_exit();
 
                     char* launchargv[2];
@@ -12495,6 +12595,7 @@ exit_gbloptions:
                         DrawDialogOK(credits_str1);
                         DrawDialogOK(credits_str2);
                         DrawDialogOK(credits_str3);
+                        DrawDialogOK(credits_str4);
                         break;
                     }
 
@@ -12565,7 +12666,9 @@ exit_gbloptions:
                     goto reboot;
 
                   case 9: // Launch Showtime
+                    SaveGameList();
                     fun_exit();
+
                     if((old_pad & (BUTTON_SELECT | BUTTON_L2)) && file_exists("/dev_hdd0/game/HTSS00003/USRDIR/showtime.self"))
                     {
                         sysProcessExitSpawn2("/dev_hdd0/game/HTSS00003/USRDIR/showtime.self", NULL, NULL, NULL, 0, 3071, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
@@ -12578,6 +12681,7 @@ exit_gbloptions:
                     break;
 
                   case 10: // Launch Internet Browser
+                    SaveGameList();
                     fun_exit();
 
                     sprintf(tmp_path, "%s/USRDIR/browser.self", self_path);
@@ -12599,7 +12703,7 @@ exit_gbloptions:
                     SaveGameList();
 
                     set_install_pkg = false;
-                    fun_exit(0);
+                    fun_exit();
 
                     sys_shutdown();
                     break;
@@ -12611,7 +12715,7 @@ exit_gbloptions:
                     set_install_pkg = true;
 
                     game_cfg.direct_boot = 0;
-                    fun_exit(0);
+                    fun_exit();
 
                     break;
 
@@ -12667,6 +12771,7 @@ exit_gbloptions:
                 DrawDialogOK(credits_str1);
                 DrawDialogOK(credits_str2);
                 DrawDialogOK(credits_str3);
+                DrawDialogOK(credits_str4);
                 break;
 
             default:
@@ -13028,12 +13133,15 @@ void draw_toolsoptions(float x, float y)
 
             ps3pad_read();
 
-            if(new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE)) exit(0);
+            if(new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE)) exit_to_xmb();
             else
             {
                 unlink_secure("/dev_hdd0/tmp/turnoff");
                 unlink_secure("/dev_hdd0/tmp/wm_request");
+
+                SaveGameList();
                 fun_exit();
+
                 sys_reboot();
             }
         }
