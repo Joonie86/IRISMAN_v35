@@ -12600,12 +12600,12 @@ exit_gbloptions:
                     }
 
                     sprintf(tmp_path, "/dev_hdd0/plugins/webftp_server.sprx");
-
+                    if(file_exists(tmp_path) == false) sprintf(tmp_path, "/dev_hdd0/plugins/webftp_server_ps3mapi.sprx");
                     if(file_exists(tmp_path) == false) sprintf(tmp_path, webman_path);
 
                     if(get_net_status() != SUCCESS) break;
 
-                    if(download_file("http://ps3.aldostools.org/webftp_server.sprx", tmp_path, 0, NULL) == 0)
+                    if(download_file("https://github.com/aldostools/webMAN-MOD/blob/master/updater/pkgfiles/USRDIR/webftp_server_full.sprx", tmp_path, 0, NULL) == 0)
                     {
                         DrawDialogOKTimer("webMAN has been updated successfully!", 2000.0f);
                     }

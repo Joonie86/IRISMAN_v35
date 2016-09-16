@@ -34,6 +34,7 @@
 #else
 
 #include "language_ini_en_bin.h"
+#include "language_ini_da_bin.h"
 #include "language_ini_kr_bin.h"
 #include "language_ini_sp_bin.h"
 #include "language_ini_fr_bin.h"
@@ -209,7 +210,8 @@ t_lngstr lang_strings[] =
     { DRAWTOOLS_LANGUAGE_11, "DRAWTOOLS_LANGUAGE_11"   , "Ελληνικός"},
     { DRAWTOOLS_LANGUAGE_12, "DRAWTOOLS_LANGUAGE_12"   , "Suomi"},
     { DRAWTOOLS_LANGUAGE_13, "DRAWTOOLS_LANGUAGE_13"   , "한국어"},
-    { DRAWTOOLS_LANGUAGE_14, "DRAWTOOLS_LANGUAGE_14"   , "Custom (from file)"},
+    { DRAWTOOLS_LANGUAGE_14, "DRAWTOOLS_LANGUAGE_14"   , "Dansk"},
+    { DRAWTOOLS_LANGUAGE_15, "DRAWTOOLS_LANGUAGE_15"   , "Custom (from file)"},
 
     { DRAWTOOLS_COPYFROM, "DRAWTOOLS_COPYFROM"     , "Copy from /dev_usb/iris to Iris folder"},
     { DRAWTOOLS_WITHBDVD, "DRAWTOOLS_WITHBDVD"     , "With BDVD Controller"},
@@ -450,6 +452,10 @@ void open_language(int lang, char * filename)
                 file_bin = (char *) language_ini_kr_bin;
                 file_size = language_ini_kr_bin_size;
                 break;
+            case 13: // da
+                file_bin = (char *) language_ini_da_bin;
+                file_size = language_ini_da_bin_size;
+                break;
             default: // en
                 file_bin = (char *) language_ini_en_bin;
                 file_size = language_ini_en_bin_size;
@@ -588,7 +594,7 @@ int get_system_language(void)
             break;
         case 0xE:
         //  strcpy( lang, "dan_language.ini" );
-            ret_lang = 0;
+            ret_lang = 13;
             break;
         case 0xF:
         //  strcpy( lang, "nor_language.ini" );
