@@ -2824,7 +2824,12 @@ bool test_ftp_working()
 #ifndef LOADER_MODE
     if(get_ftp_activity())
     {
-        if(DrawDialogYesNo("FTP is working now\nDo you want to interrupt the FTP activity?\n\nEl FTP esta trabajando ahora mismo\nDesea interrumpir su actividad?\n\nService FTP en cours\nL'intérompre?") == YES)
+        if(DrawDialogYesNo("FTP is working now\n"
+                           "Do you want to interrupt the FTP activity?\n\n"
+                           "El FTP está trabajando ahora mismo\n"
+                           "Desea interrumpir su actividad?\n\n"
+                           "Service FTP en cours\n"
+                           "L'intérompre?") == YES)
         {
             ftp_deinit();
             ftp_inited = false;
@@ -12292,7 +12297,7 @@ void draw_gbloptions(float x, float y)
     if(!bAllowNetGames &&  !(net_option == 0 || (net_option >= 7 && net_option <= 13))) net_option = 0;
 
     if (net_option == 0)
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, (ftp_ip_str[0]) ? ftp_ip_str : language[DRAWGLOPT_INITFTP], bSelected);
+        DrawButton1_UTF8((848 - 520) / 2, y2, 520, (*ftp_ip_str) ? ftp_ip_str : language[DRAWGLOPT_INITFTP], bSelected);
     else
         DrawButton1_UTF8((848 - 520) / 2, y2, 520, (net_option ==  1) ? "Mount /net_host0/PKG as /dev_bdvd" :
                                                    (net_option ==  2) ? "Mount /net_host0/VIDEO as /dev_bdvd" :
@@ -12934,6 +12939,12 @@ exit_gbloptions:
     // Network Tools
     else if(select_option == 6)
     {
+        if((new_pad & BUTTON_SQUARE) && ((manager_cfg.opt_flags & OPTFLAGS_FTP) == 0))
+        {
+             ftp_port = (ftp_port == 21) ? 22 : (ftp_port == 22) ? 2121 : 21;
+             sprintf(ftp_ip_str, "%s : %i", language[DRAWGLOPT_INITFTP], ftp_port);
+        }
+
         if(new_pad & (BUTTON_LEFT))
         {
             ROT_DEC(net_option, 0, 13)

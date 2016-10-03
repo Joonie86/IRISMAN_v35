@@ -1088,6 +1088,8 @@ int CopyFile(char* path, char* path2)
 
     s32 flags = 0;
 
+    filepath_check(path2);
+
     if(is_ntfs_path(path )) flags|= CPY_FILE1_IS_NTFS;
     if(is_ntfs_path(path2)) flags|= CPY_FILE2_IS_NTFS;
 
@@ -1430,6 +1432,8 @@ int CopyDirectory(char* path, char* path2, char* path3)
     // avoid recursive-infinite copy
     if(!strncmp(path, path3, strlen(path3))) return SUCCESS;
 
+    filepath_check(path2);
+
     if(is_ntfs_path(path )) flags|= CPY_FILE1_IS_NTFS;
     if(is_ntfs_path(path2)) flags|= CPY_FILE2_IS_NTFS;
 
@@ -1752,7 +1756,6 @@ int copy_archive_file(char *path1, char *path2, char *file, u64 free)
                 sprintf(TEMP_PATH1, "%s/%s", path1, file);
                 sprintf(TEMP_PATH2, "%s/%s", path2, file);
             }
-
 
             ret = CopyFile(TEMP_PATH1, TEMP_PATH2);
             if(ret < 0) goto end;

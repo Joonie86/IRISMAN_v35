@@ -50,6 +50,24 @@ extern u64 pad_last_time; // to prevent shutdown when FTP is used
 
 int sys_fs_mount(char const* deviceName, char const* deviceFileSystem, char const* devicePath, int writeProt);
 int sys_fs_umount(char const* devicePath);
+bool isDir( char* path );
+
+static void parse_wildcard(char *param, char *cwd, char *tmp_path, char *wcard, int split)
+{
+    char *pw, *ps; *wcard = 0;
+
+    pw = strchr(param, '*');if(pw) {ps = strrchr(param, '/'); if((ps > param) && (ps < pw)) pw = ps; while(*pw == '*' || *pw == '/') *pw++ = 0; strcpy(wcard, pw); pw = strstr(wcard, "*"); if(pw) *pw = 0; if(!*wcard && !ps) strcpy(wcard, param);}
+
+    if(*param == 0) split = 0;
+
+    if(split == 1)
+    {
+        abspath(param, cwd, tmp_path);
+    }
+
+    if(split != 1 || !isDir(tmp_path)) strcpy(tmp_path, cwd);
+
+}
 
 void client_thread(void *conn_s_p)
 {
@@ -74,8 +92,9 @@ void client_thread(void *conn_s_p)
     char source[256];
     char user[16];
     char tmp_path[256];
+    char wcard[256];
 
-    bytes = sprintf(temp, "220 OpenPS3FTP %s by jjolano\r\n", OFTP_VERSION);
+    bytes = sprintf(temp, "220 OpenPS3FTP %s by jjolano (IRISMAN)\r\n", OFTP_VERSION);
     send(conn_s, temp, bytes, 0);
 
     while(appstate != 1 && (bytes = recv(conn_s, temp, 511, 0)) > 0)
@@ -107,13 +126,13 @@ void client_thread(void *conn_s_p)
         // check expected command
         if(!is_empty(expectcmd) && strcasecmp(cmd, expectcmd) != 0)
         {
-            cmd[0] = '\0';
+            *cmd = '\0';
 
             bytes = ftpresp(temp, 503, "Bad command sequence");
             send(conn_s, temp, bytes, 0);
         }
 
-        expectcmd[0] = '\0';
+        *expectcmd = '\0';
 
         // parse commands
         if(is_empty(cmd))
@@ -128,7 +147,7 @@ void client_thread(void *conn_s_p)
             send(conn_s, temp, bytes, 0);
         }
         else
-        if(strcasecmp(cmd, "QUIT") == 0)
+        if((strcasecmp(cmd, "QUIT") == 0) || (strcasecmp(cmd, "BYE") == 0))
         {
             ftp_working = 0;
             bytes = ftpresp(temp, 221, "Goodbye");
@@ -146,7 +165,7 @@ void client_thread(void *conn_s_p)
         {
             char *feat[] =
             {
-                "REST STREAM", "PASV", "PORT", "MDTM", "MLSD", "SIZE", "SITE", "APPE",
+                "REST STREAM", "PASV", "PORT", "SIZE", "SITE", "APPE", "LIST", "MDTM", "MLSD",
                 "MLST type*;size*;sizd*;modify*;UNIX.mode*;UNIX.uid*;UNIX.gid*;"
             };
 
@@ -170,22 +189,22 @@ void client_thread(void *conn_s_p)
         {
             char *feat[] =
             {
-                "SITE CHMOD", "SITE FLASH", "SITE COPY", "SITE PASTE", "SITE RESTART", "SITE RESET", "SITE SHUTDOWN", "SITE EXITAPP"
+                "CHMOD", "FLASH", "COPY", "PASTE", "RESTART", "RESET", "SHUTDOWN", "EXITAPP"
             };
 
             int feat_count = sizeof(feat) / sizeof(char *);
             int i = 0;
 
-            bytes = sprintf(temp, "211-Help:\r\n");
+            bytes = sprintf(temp, "214-Help:\r\n");
             send(conn_s, temp, bytes, 0);
 
             for(; i < feat_count; i++)
             {
-                bytes = sprintf(temp, " %s\r\n", feat[i]);
+                bytes = sprintf(temp, " SITE %s\r\n", feat[i]);
                 send(conn_s, temp, bytes, 0);
             }
 
-            bytes = ftpresp(temp, 211, "End");
+            bytes = ftpresp(temp, 214, "End");
             send(conn_s, temp, bytes, 0);
         }
         else
@@ -415,11 +434,14 @@ cdup:           bytes = 0;
             else
             if(strcasecmp(cmd, "LIST") == 0)
             {
-                if(is_ntfs_path(cwd))
+              list:
+                parse_wildcard(param, cwd, tmp_path, wcard, itemp);
+
+                if(is_ntfs_path(tmp_path))
                 {
                     DIR_ITER *fd = NULL;
 
-                    fd = ps3ntfs_diropen(cwd);
+                    fd = ps3ntfs_diropen(tmp_path);
                     if(fd != NULL)
                     {
                         if(data_s == -1)
@@ -476,7 +498,7 @@ cdup:           bytes = 0;
                         {
                             pad_last_time = 0;
 
-                            abspath(entry.d_name, cwd, temp);
+                            abspath(entry.d_name, tmp_path, temp);
 
                             bytes = sprintf(temp, "%s%s%s%s%s%s%s%s%s%s   1 nobody   nobody   %10llu Jan  1 00:00 %s\r\n",
                                 fis_dir(stat) ? "d" : "-",
@@ -507,7 +529,7 @@ cdup:           bytes = 0;
                 {
                     s32 fd;
 
-                    if(sysLv2FsOpenDir(cwd, &fd) == 0)
+                    if(sysLv2FsOpenDir(tmp_path, &fd) == 0)
                     {
                         if(data_s == -1)
                         {
@@ -562,9 +584,11 @@ cdup:           bytes = 0;
 
                         while(sysLv2FsReadDir(fd, &entry, &read) == 0 && read > 0)
                         {
+                            if(*wcard && strcasestr(entry.d_name, wcard) == NULL) continue;
+
                             pad_last_time = 0;
 
-                            if(strcmp2(cwd, "/") == 0 &&
+                            if(strcmp2(tmp_path, "/") == 0 &&
                               (strcmp2(entry.d_name, "app_home") == 0 ||
                                strcmp2(entry.d_name, "host_root") == 0))
                             {
@@ -578,13 +602,13 @@ cdup:           bytes = 0;
 
                             while((dqueue - 1) > itemp);
 
-                            abspath(entry.d_name, cwd, temp);
+                            abspath(entry.d_name, tmp_path, temp);
                             sysLv2FsStat(temp, &stat);
 
                             char entry_date[14];
                             strftime(entry_date, 13, "%b %e %H:%M", localtime(&stat.st_mtime));
 
-                            bytes = sprintf(temp, "%s%s%s%s%s%s%s%s%s%s   1 nobody   nobody   %10llu %s %s\r\n",
+                            bytes = sprintf(temp, "%s%s%s%s%s%s%s%s%s%s 1 root  root  %13llu %s %s\r\n",
                                 fis_dir(stat) ? "d" : "-",
                                 ((stat.st_mode & S_IRUSR) != 0) ? "r" : "-",
                                 ((stat.st_mode & S_IWUSR) != 0) ? "w" : "-",
@@ -602,7 +626,7 @@ cdup:           bytes = 0;
                             dqueue--;
                         }
 
-                        if(!strcmp(cwd, "/"))
+                        if(!strcmp(tmp_path, "/"))
                         {
                             for(int k = 0, i = 0; i < 8; i++)
                             {
@@ -629,7 +653,7 @@ cdup:           bytes = 0;
                         uint32_t blockSize;
                         uint64_t freeSize;
                         memset(param, 0, 495);
-                        strcpy(param, cwd);
+                        strcpy(param, tmp_path);
                         if(strchr(param+1, '/')) param[strchr(param+1, '/')-param]=0;
 
                         sysFsGetFreeSize(param, &blockSize, &freeSize);
@@ -656,7 +680,9 @@ cdup:           bytes = 0;
             {
                 s32 fd;
 
-                if(sysLv2FsOpenDir(cwd, &fd) == 0)
+                parse_wildcard(param, cwd, tmp_path, wcard, itemp);
+
+                if(sysLv2FsOpenDir(tmp_path, &fd) == 0)
                 {
                     if(data_s == -1)
                     {
@@ -707,18 +733,15 @@ cdup:           bytes = 0;
 
                     sysFSStat stat;
                     sysFSDirent entry;
-                    u64 read;
+                    u64 read; char dirtype[2]; dirtype[1] = '\0';
+
+                    bool is_root  = (strcmp2(tmp_path, "/") == 0);
 
                     while(sysLv2FsReadDir(fd, &entry, &read) == 0 && read > 0)
                     {
                         pad_last_time = 0;
 
-                        if(strcmp2(cwd, "/") == 0
-                        && (strcmp2(entry.d_name, "app_home") == 0
-                        || strcmp2(entry.d_name, "host_root") == 0))
-                        {
-                            continue;
-                        }
+                        if(is_root && (strcmp2(entry.d_name, "app_home") == 0 || strcmp2(entry.d_name, "host_root") == 0)) continue;
 
                         // experimental queue system
                         // to try and prevent some io crashes
@@ -727,28 +750,25 @@ cdup:           bytes = 0;
 
                         while((dqueue - 1) > itemp);
 
-                        abspath(entry.d_name, cwd, temp);
+                        abspath(entry.d_name, tmp_path, temp);
                         sysLv2FsStat(temp, &stat);
 
                         char entry_date[15];
                         strftime(entry_date, 14, "%Y%m%d%H%M%S", localtime(&stat.st_mtime));
 
-                        char dirtype[2];
                         if(strcmp2(entry.d_name, ".") == 0)
                         {
-                            dirtype[0] = 'c';
+                            *dirtype = 'c';
                         }
                         else
                         if(strcmp2(entry.d_name, "..") == 0)
                         {
-                            dirtype[0] = 'p';
+                            *dirtype = 'p';
                         }
                         else
                         {
-                            dirtype[0] = '\0';
+                            *dirtype = '\0';
                         }
-
-                        dirtype[1] = '\0';
 
                         bytes = sprintf(temp, "type=%s%s;siz%s=%llu;modify=%s;UNIX.mode=0%i%i%i;UNIX.uid=nobody;UNIX.gid=nobody; %s\r\n",
                             dirtype, fis_dir(stat) ? "dir" : "file",
@@ -782,25 +802,24 @@ cdup:           bytes = 0;
             {
                 s32 fd;
 
-                if(sysLv2FsOpenDir(cwd, &fd) == 0)
+                parse_wildcard(param, cwd, tmp_path, wcard, itemp);
+
+                if(sysLv2FsOpenDir(tmp_path, &fd) == 0)
                 {
                     bytes = sprintf(temp, "250-Directory Listing:\r\n");
                     send(conn_s, temp, bytes, 0);
 
                     sysFSStat stat;
                     sysFSDirent entry;
-                    u64 read;
+                    u64 read; char dirtype[2]; dirtype[1] = '\0';
+
+                    bool is_root  = (strcmp2(tmp_path, "/") == 0);
 
                     while(sysLv2FsReadDir(fd, &entry, &read) == 0 && read > 0)
                     {
                         pad_last_time = 0;
 
-                        if(strcmp2(cwd, "/") == 0
-                        && (strcmp2(entry.d_name, "app_home") == 0
-                        || strcmp2(entry.d_name, "host_root") == 0))
-                        {
-                            continue;
-                        }
+                        if(is_root && (strcmp2(entry.d_name, "app_home") == 0 || strcmp2(entry.d_name, "host_root") == 0)) continue;
 
                         // experimental queue system
                         // to try and prevent some io crashes
@@ -809,28 +828,25 @@ cdup:           bytes = 0;
 
                         while((dqueue - 1) > itemp);
 
-                        abspath(entry.d_name, cwd, temp);
+                        abspath(entry.d_name, tmp_path, temp);
                         sysLv2FsStat(temp, &stat);
 
                         char entry_date[15];
                         strftime(entry_date, 14, "%Y%m%d%H%M%S", localtime(&stat.st_mtime));
 
-                        char dirtype[2];
                         if(strcmp2(entry.d_name, ".") == 0)
                         {
-                            dirtype[0] = 'c';
+                            *dirtype = 'c';
                         }
                         else
                         if(strcmp2(entry.d_name, "..") == 0)
                         {
-                            dirtype[0] = 'p';
+                            *dirtype = 'p';
                         }
                         else
                         {
-                            dirtype[0] = '\0';
+                            *dirtype = '\0';
                         }
-
-                        dirtype[1] = '\0';
 
                         bytes = sprintf(temp, "type=%s%s;siz%s=%llu;modify=%s;UNIX.mode=0%i%i%i;UNIX.uid=nobody;UNIX.gid=nobody; %s\r\n",
                             dirtype, fis_dir(stat) ? "dir" : "file",
@@ -859,11 +875,15 @@ cdup:           bytes = 0;
             else
             if(strcasecmp(cmd, "NLST") == 0)
             {
-                if(is_ntfs_path(cwd))
+                if(strcmp(param, "-l") == 0) {*param = 0; goto list;}
+
+                parse_wildcard(param, cwd, tmp_path, wcard, itemp);
+
+                if(is_ntfs_path(tmp_path))
                 {
                     DIR_ITER *fd = NULL;
 
-                    fd = ps3ntfs_diropen(cwd);
+                    fd = ps3ntfs_diropen(tmp_path);
                     if(fd != NULL)
                     {
                         if(data_s == -1)
@@ -936,7 +956,7 @@ cdup:           bytes = 0;
                 {
                     s32 fd;
 
-                    if(sysLv2FsOpenDir(cwd, &fd) == 0)
+                    if(sysLv2FsOpenDir(tmp_path, &fd) == 0)
                     {
                         if(data_s == -1)
                         {
@@ -995,7 +1015,7 @@ cdup:           bytes = 0;
                             if(send(data_s, temp, bytes, 0) < 0) break;
                         }
 
-                        if(!strcmp(cwd, "/"))
+                        if(!strcmp(tmp_path, "/"))
                         {
                             for(int k = 0, i = 0; i < 8; i++)
                             {
@@ -1289,7 +1309,6 @@ cdup:           bytes = 0;
                         if(fd >= 0)
                         {
                             ftp_working = 1;
-
                             if(data_s == -1)
                             {
                                 if(pasv_s > 0)
@@ -1400,7 +1419,6 @@ cdup:           bytes = 0;
                         if(sysLv2FsOpen(temp, SYS_O_RDONLY, &fd, 0, NULL, 0) == 0)
                         {
                             ftp_working = 1;
-
                             if(data_s == -1)
                             {
                                 if(pasv_s > 0)
@@ -1611,7 +1629,7 @@ cdup:           bytes = 0;
                     }
                     else
                     {
-                        tmp_path[0] = '\0';
+                        *tmp_path = '\0';
                         bytes = ftpresp(temp, 550, "RNFR failed - file does not exist");
                     }
                 }

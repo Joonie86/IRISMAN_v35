@@ -458,6 +458,18 @@ u64 get_filesize(char *path)
     }
 }
 
+bool isDir( char* path )
+{
+    if(is_ntfs_path(path))
+    {
+        struct stat st;
+        return ps3ntfs_stat(path, &st) >= SUCCESS && (st.st_mode & FS_S_IFDIR);
+    }
+
+    sysFSStat stat;
+    return sysLv2FsStat(path, &stat) == SUCCESS && (stat.st_mode & FS_S_IFDIR);;
+}
+
 bool file_exists( char* path )
 {
     if(is_ntfs_path(path))
@@ -665,13 +677,15 @@ int get_field_param_sfo(char *file, char *fieldname, char *value, int field_len)
         str = (mem[8] + (mem[9]<<8));
         pos = (mem[0xc] + (mem[0xd]<<8));
 
-        int indx = 0;
+        int indx = 0, fieldname_len;
+
+        fieldname_len = strlen(fieldname);
 
         while(str < len)
         {
             if(mem[str] == 0) break;
 
-            if(!strncmp((char *) &mem[str], fieldname, strlen(fieldname) + 1))
+            if(!strncmp((char *) &mem[str], fieldname, fieldname_len + 1))
             {
                 memcpy(value, (char *) &mem[pos], field_len);
                 value[field_len] = 0;
@@ -1877,7 +1891,9 @@ void add_custom_icons(t_directories *list, int *max)
     {
         char title_id[10];
 
-        for(int i = 0; i < strlen(custom_homebrews); i+=10)
+        int custom_homebrews_len = strlen(custom_homebrews);
+
+        for(int i = 0; i < custom_homebrews_len; i+=10)
         {
             strncpy(title_id, custom_homebrews + i, 9);
 
@@ -1910,7 +1926,7 @@ int delete_custom_icons(t_directories *list, int *max)
     n = 0;
     while(n < (*max) && (*max) > 0)
     {
-        if((strlen(list[n].title_id) > 0) && (strstr(custom_homebrews, list[n].title_id) != NULL))
+        if((list[n].title_id[0] > 0) && (strstr(custom_homebrews, list[n].title_id) != NULL))
         {
             deleted++;
 
@@ -2079,9 +2095,9 @@ int fill_iso_entries_from_device(char *path, u32 flag, t_directories *list, int 
     bool is_dvd_iso = (strstr(path, "/DVDISO")!=NULL);
 
     bool is_psp = (flag & (PSP_FLAG | RETRO_FLAG)) == (PSP_FLAG | RETRO_FLAG);
-    bool is_retro = is_psp && strlen(retro_root_path) > 0 && (strstr(path, retro_root_path) != NULL);
+    bool is_retro = is_psp && (retro_root_path[0] > 0) && (strstr(path, retro_root_path) != NULL);
     bool is_ps2_classic = is_psp && !is_retro &&
-                          (strlen(ps2classic_path) > 0 && strstr(path, ps2classic_path) != NULL);
+                          ((ps2classic_path[0] > 0) && strstr(path, ps2classic_path) != NULL);
 
     char wm_path[MAX_PATH_LEN];
     bool use_wmtmp =  file_exists("/dev_hdd0/tmp/wmtmp");
@@ -2142,7 +2158,7 @@ int fill_iso_entries_from_device(char *path, u32 flag, t_directories *list, int 
         }
         else if(flag & (PS1_FLAG))
         {
-            int flen = strlen(dir.d_name) - 4;
+            int flen = dir.d_namlen - 4;
 
             if(flen < 0 || strcasestr(".iso|.bin|.mdf|.img", dir.d_name + flen) == NULL) continue;
         }
@@ -2211,7 +2227,7 @@ int fill_iso_entries_from_device(char *path, u32 flag, t_directories *list, int 
             else if(strstr(path, "PS2ISO/"))
                 strcpy(name, strstr(path, "PS2ISO/")+7);
 
-            for(u16 p=strlen(name); p>0; p--) if(name[p]=='/') name[p]=0;
+            for(u16 p = strlen(name); p > 0; p--) if(name[p]=='/') name[p]=0;
         }
 
         // cache ICON0 and SFO for webMAN
@@ -3096,6 +3112,21 @@ static int files_opened=0;
 
 static int total_fast_files = 0;
 
+void filepath_check(char *file)
+{
+    if((file[5] == 'u' && !strncmp(file, "/dev_usb", 8)) || (file[2] != 'd' && is_ntfs_path(file)))
+    {
+        u16 n = 8, c = 8;
+        // remove invalid chars
+        while(true)
+        {
+            if(file[c] == '\\') file[c] = '/';
+            if(strchr("\"<|>:*?", file[c]) == NULL) file[n++] = file[c];
+            if(!file[c++]) break;
+        }
+    }
+}
+
 static int fast_copy_async(char *pathr, char *pathw, int enable)
 {
 
@@ -3108,6 +3139,8 @@ static int fast_copy_async(char *pathr, char *pathw, int enable)
     files_opened  = 0;
 
     current_fast_file_r = current_fast_file_w = 0;
+
+    filepath_check(pathw);
 
     if(enable)
     {
@@ -3155,6 +3188,8 @@ static int fast_copy_add(char *pathr, char *pathw, char *file)
     int strl = strlen(file);
 
     sysFSStat s;
+
+    filepath_check(pathw);
 
     if(fast_num_files >= MAX_FAST_FILES || fast_used_mem >= FILESIZE_MAX)
     {
@@ -4374,6 +4409,7 @@ static int _my_game_copy(char *path, char *path2)
 {
     Lv2FsFile  dir;
 
+    filepath_check(path2);
 
     if (sysFsOpendir(path, &dir)) {DPrintf("Error in sysFsOpendir()\n"); abort_copy = 7; return FAILED;}
 
@@ -4661,19 +4697,39 @@ void copy_from_selection(int game_sel)
             sprintf(progress_bar_title, "USB00%c -> HDD0", 47 + n);
 
             char *p;
-            if(directories[game_sel].flags & (PS1_FLAG))
+            if((directories[game_sel].flags & (PS1_FLAG)) == (PS1_FLAG))
             {
                 p = strstr(directories[game_sel].path_name, "/PSXGAMES");
 
-                if(!p) p = "NULL"; else p += 10;
+                if(!p) {p = strstr(directories[game_sel].path_name, "/PSXISO"); if(p) p += 8;} else p += 10;
+
+                if(!p) p = "NULL";
+            }
+            else
+            if((directories[game_sel].flags & (PS2_FLAG)) == (PS2_FLAG))
+            {
+                p = strstr(directories[game_sel].path_name, "/PS2ISO");
+
+                if(!p) p = "NULL"; else p += 8;
+            }
+            else
+            if((directories[game_sel].flags & (PSP_FLAG)) == (PSP_FLAG))
+            {
+                p = strstr(directories[game_sel].path_name, "/PSPISO");
+
+                if(!p) p = "NULL"; else p += 8;
             }
             else
             {
-                p = strstr(directories[game_sel].path_name, "/" __MKDEF_GAMES_DIR);
+                p = strstr(directories[game_sel].path_name, "/" __MKDEF_GAMES_DIR); if(p) p += 7;
 
-                if(!p) p = strstr(directories[game_sel].path_name, "/GAMES");
+                if(!p) {p = strstr(directories[game_sel].path_name, "/GAMES"); if(p) p += 7;}
 
-                if(!p) p = "NULL"; else p += 7;
+                if(!p) {p = strstr(directories[game_sel].path_name, "/GAMEZ"); if(p) p += 7;}
+
+                if(!p) {p = strstr(directories[game_sel].path_name, "/PS3ISO"); if(p) p += 8;}
+
+                if(!p) p = "NULL";
             }
 
 
@@ -4768,6 +4824,8 @@ void copy_from_selection(int game_sel)
             }
             //DrawDialogOK(name);
             //DrawDialogOK(filename);
+
+            filepath_check(filename);
 
             // try rename
             if(copy_is_split)

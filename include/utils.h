@@ -184,6 +184,8 @@ bool is_audio(char *ext);
 bool is_audiovideo(char *ext);
 bool is_browser_file(char *ext);
 
+void filepath_check(char *file);
+
 u64 get_filesize(char *path);
 bool file_exists( char* path );
 char * get_extension(char *path);
