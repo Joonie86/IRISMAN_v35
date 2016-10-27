@@ -67,4 +67,3 @@ void listener_thread(void *unused)
 
     sysThreadExit(0);
 }
-

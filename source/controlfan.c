@@ -481,35 +481,6 @@ int get_controlfan_offsets()
 
 static u64 payload_ctrl;
 
-#define SYSCALL8_OPCODE_PS3MAPI              0x7777ULL
-#define PS3MAPI_OPCODE_GET_VSH_PLUGIN_INFO   0x0047ULL
-#define PS3MAPI_OPCODE_GET_CORE_MINVERSION   0x0012ULL
-
-LV2_SYSCALL ps3mapi_get_core_minversion(void)
-{
-    lv2syscall2(SYSCALL_MAMBA, SYSCALL8_OPCODE_PS3MAPI, PS3MAPI_OPCODE_GET_CORE_MINVERSION);
-    return_to_user_prog(s32);
-}
-
-static int get_vsh_plugin_free_slot(void)
-{
-    if(ps3mapi_get_core_minversion() == 0) return 6;
-
-    char tmp_name[30];
-    char tmp_filename[256];
-    int slot;
-
-    for (slot = 1; slot < 7; slot++)
-    {
-        memset(tmp_name, 0, sizeof(tmp_name));
-        memset(tmp_filename, 0, sizeof(tmp_filename));
-        lv2syscall5(SYSCALL_MAMBA, SYSCALL8_OPCODE_PS3MAPI, PS3MAPI_OPCODE_GET_VSH_PLUGIN_INFO, (u64)slot, (u64)tmp_name, (u64)tmp_filename);
-        if(strlen(tmp_filename) == 0 && strlen(tmp_name) == 0) {return slot;}
-    }
-
-    return FAILED;
-}
-
 static int load_ps3_controlfan_sm_sprx()
 {
     // test if sm.sprx pseudo payload is loaded
@@ -873,8 +844,9 @@ void load_controlfan_config()
         }
     }
 
-    set_fan_mode(fan_mode);
+    if(get_vsh_plugin_slot_by_name("WWWD") > 0) fan_mode = FANCTRL_DISABLED;
 
+    set_fan_mode(fan_mode);
 }
 
 void draw_controlfan_options()
@@ -1484,7 +1456,11 @@ void draw_controlfan_options()
                         sprintf(FANCONTROL_PATH, "%s/config/fancontrol.dat", self_path);
                         SaveFile((void *) (FANCONTROL_PATH), (void *) temp_buffer, n);
 
+                        set_adjust = false;
                     }
+                    else
+                        return;
+
                     break;
 
             }

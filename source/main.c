@@ -157,7 +157,7 @@ u32 snd_inited = 0;
 
 bool use_cobra = false;
 bool use_mamba = false; // cobra app version
-bool is_mamba_v3 = false;
+bool is_mamba_v2 = false;
 bool unsupported_cfw = false;
 
 bool install_mamba = true;
@@ -180,8 +180,8 @@ u64 restore_syscall8[2] = {0,0};
 #define GUI_MODES  15
 
 enum GuiModes {
-  MODE_XMB_LIKE  = 0,
-  MODE_COVERFLOW = 1,
+  MODE_XMB_LIKE  =  0,
+  MODE_COVERFLOW =  1,
   MODE_GRID_3x2  =  2,
   MODE_GRID_4x2  =  3,
   MODE_GRID_3x3  =  4,
@@ -198,17 +198,18 @@ enum GuiModes {
   MODE_GRID_8x6  = 15,
 };
 
-int gui_mode = MODE_COVERFLOW; // GUI selector
-int cover_mode = 0;
-int sort_mode = 0;
+static int gui_mode = MODE_COVERFLOW; // GUI selector
+static int cover_mode = 0;
+static int sort_mode = 0;
 
 u16  BUTTON_CROSS_  = BUTTON_CROSS;  //0x0040
 u16  BUTTON_CIRCLE_ = BUTTON_CIRCLE; //0x0020
 
-int net_option = 0;
-int filter_by_device = LIST_ALL_DEVICES, opt_filter_by_device = LIST_ALL_DEVICES;
+static int net_option = 0;
+static int filter_by_device = LIST_ALL_DEVICES, opt_filter_by_device = LIST_ALL_DEVICES;
 int filter_by_letter = 0;
 
+bool refresh_game_list = false;
 bool bAllowNetGames = false; // enabled only if webMAN is installed
 bool bXMLScanOnlyNetGames = true;
 bool bSkipParseXML = false;
@@ -217,11 +218,10 @@ bool ftp_inited = false;
 bool refresh_gui = false;
 bool allow_save_lastgame = false;
 
-bool cached_game_list = false; //only once
-bool found_game_insert = false;
-bool found_game_remove = false;
-bool do_once = true;
-
+static bool cached_game_list = false; //only once
+static bool found_game_insert = false;
+static bool found_game_remove = false;
+static bool do_once = true;
 bool show_http_errors = false;
 
 // grid config for gui1
@@ -236,13 +236,16 @@ enum background_types {
 
 int bk_picture = BG_NONE;
 
+static const float box_left = (848 - 520) / 2;
+static const float box_width = (200 * 4) - 8;
+static const float box_height = (150 * 3) - 8;
 
 bool options_locked = false; // true when control parental is between 1 and 9, false for parental 0 (disabled)
 
 int noBDVD = MODE_DISCLESS;
 
-bool save_game_list_after_refresh = false;
-bool is_ps3game_running = false;
+static bool save_game_list_after_refresh = false;
+static bool is_ps3game_running = false;
 
 int game_list_category = GAME_LIST_ALL;
 
@@ -299,6 +302,8 @@ void load_background_picture();
 
 void mount_iso_game();
 void test_audio_file();
+
+bool scan_canceled = false;
 
 // music
 static int MAX_SONGS = 0;
@@ -421,7 +426,6 @@ bool bLoadPIC1 = false;
 bool bSkipPIC1 = false;
 bool bSpoofVersion = false;
 bool bHideCoverflowSortModeLabel = false;
-bool bAutoLaunchPrxLoader = true;
 bool bSkipBDMirrorMsg = true;
 char passwd[64];
 
@@ -1513,6 +1517,9 @@ int background_fx = 0;
 
 #define MAX_COLORS  12
 
+const u32 BLACK = 0x00000028;
+const u32 WHITE = 0xffffffff;
+
 u32 background_colors[MAX_COLORS] = {
     0xff000000, //Animated Background
     0xff000010, //Dark blue
@@ -1580,7 +1587,7 @@ void cls0()
                 Png_datas[BACKGROUND_PICT].height, Png_datas[BACKGROUND_PICT].wpitch,
                 TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP, 1);
 
-            DrawTextBox(-1, -1, 1000, 850, 514, (background_sel & 1) ? 0xffffffff : 0xcfcfcfff);
+            DrawTextBox(-1, -1, 1000, 850, 514, (background_sel & 1) ? WHITE : 0xcfcfcfff);
             return;
         }
     }
@@ -2090,24 +2097,11 @@ void fun_exit()
 
     if(restore_syscall8[0]) sys8_pokeinstr(restore_syscall8[0], restore_syscall8[1]);
 
-#ifdef LOADER_MODE
-  #ifdef PRXMAMBA_LOADER
-    if(file_exists("/dev_hdd0/game/IRISMAN01/USRDIR/prxloader.self"))
-    {
-        sysProcessExitSpawn2("/dev_hdd0/game/IRISMAN01/USRDIR/prxloader.self", NULL, NULL, NULL, 0, 3071, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-        exit(0);
-    }
-
-    sysProcessExitSpawn2("/dev_hdd0/game/IRISMAN00/USRDIR/prxloader.self", NULL, NULL, NULL, 0, 3071, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
-  #endif
-#else
+#ifndef LOADER_MODE
     if(game_cfg.direct_boot == 555 && use_cobra)
         sysProcessExitSpawn2("/dev_bdvd/PS3_GAME/USRDIR/EBOOT.BIN", NULL, NULL, NULL, 0, 3071, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
 
     if(set_install_pkg) sys_reboot();
-
-    if(bAutoLaunchPrxLoader && use_mamba)
-        sysProcessExitSpawn2("/dev_hdd0/game/IRISMAN00/USRDIR/prxloader.self", NULL, NULL, NULL, 0, 3071, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
 #endif
 }
 
@@ -2274,9 +2268,7 @@ void LoadGameList()
         delete_entries(directories, &ndirectories, 0);
         sort_entries2(directories, &ndirectories, sort_mode);
 
-        cached_game_list = true;
-
-        if(ndirectories <= 0) cached_game_list = false; //fdevices_old = -1; // force scan
+        cached_game_list = (ndirectories > 0);
     }
 }
 
@@ -2401,11 +2393,11 @@ void video_adjust()
                     TINY3D_BLEND_RGB_FUNC_ADD | TINY3D_BLEND_ALPHA_FUNC_ADD);
         reset_ttf_frame();
 
-        DrawAdjustBackground(0xffffffff) ; // light blue
+        DrawAdjustBackground(WHITE);
 
         update_twat(false);
         SetFontSize(16, 24);
-        SetFontColor(0xffffffff, 0x0);
+        SetFontColor(WHITE, BLACK);
 
         SetFontAutoCenter(1);
 
@@ -2824,12 +2816,12 @@ bool test_ftp_working()
 #ifndef LOADER_MODE
     if(get_ftp_activity())
     {
-        if(DrawDialogYesNo("FTP is working now\n"
-                           "Do you want to interrupt the FTP activity?\n\n"
-                           "El FTP está trabajando ahora mismo\n"
-                           "Desea interrumpir su actividad?\n\n"
-                           "Service FTP en cours\n"
-                           "L'intérompre?") == YES)
+        if(DrawDialogYesNoDefaultYes("FTP is working now\n"
+                                     "Do you want to interrupt the FTP activity?\n\n"
+                                     "El FTP está trabajando ahora mismo\n"
+                                     "Desea interrumpir su actividad?\n\n"
+                                     "Service FTP en cours\n"
+                                     "L'intérompre?") == YES)
         {
             ftp_deinit();
             ftp_inited = false;
@@ -2995,10 +2987,7 @@ void locate_last_game()
     last_game_flag = 0;
 }
 
-void parse_mygames_xml();
-int locate_game_url(u8 *mem, int pos, int size, char *key, int *length);
-
-int locate_game_url(u8 *mem, int pos, int size, char *key, int *length)
+static int locate_game_url(u8 *mem, int pos, int size, char *key, int *length)
 {
     int start = 0;
     int end = 0;
@@ -3044,7 +3033,7 @@ int locate_game_url(u8 *mem, int pos, int size, char *key, int *length)
     return start;
 }
 
-void parse_mygames_xml()
+static void parse_mygames_xml()
 {
     char game_path[1024];
 
@@ -3099,7 +3088,8 @@ void parse_mygames_xml()
         char *pos = strstr(directories[ndirectories].path_name, "?");
         if(pos) *pos = 0;
 
-        sprintf(directories[ndirectories].title, "%s", str_replace(str_replace(str_replace(str_replace(str_replace(get_filename(directories[ndirectories].path_name), "%20", " "), "%26", "&"), "%3A", ":"), "%3F", "?"), "%2B", "+"));
+        sprintf(directories[ndirectories].title, "%s", get_filename(directories[ndirectories].path_name));
+        urldec(directories[ndirectories].title);
 
         directories[ndirectories].title[63] = 0;
 
@@ -3126,7 +3116,6 @@ void read_settings()
     char ShowPIC1[2] = "0";
     char ShowVersion[2] = "2";
     char SpoofVersion[2] = "0";
-    char AutoLaunchPrxLoader[2] = "1";
     char HideCoverflowSortModeLabel[2] = "0";
     char TimeoutByInactivity[2] = "1"; // 1 hour
     char SkipBDMirrorMsg[2] = "1";
@@ -3142,7 +3131,7 @@ void read_settings()
     sprintf(backgrounds_path, "%s/USRDIR/background/", self_path);
     strcpy(updates_path, "/dev_hdd0/packages");
     strcpy(video_path, "/MKV");
-    strcpy(webman_path, "/dev_hdd0/webftp_server.sprx");
+    strcpy(webman_path, "/dev_hdd0/plugin/webftp_server.sprx");
     strcpy(psp_launcher_path, "/dev_hdd0/game/PSPC66820");
     strcpy(retroarch_path, "/dev_hdd0/game/SSNE10000");
     strcpy(ps2classic_path, "/PS2ISO");
@@ -3268,7 +3257,6 @@ void read_settings()
         getConfigMemValueString((char *) file, file_size, GUI_SECTION, "OptionsShowPIC1", ShowPIC1, 2, ShowPIC1);
         getConfigMemValueString((char *) file, file_size, GUI_SECTION, "ShowVersion", ShowVersion, 2, ShowVersion);
         getConfigMemValueString((char *) file, file_size, GUI_SECTION, "SpoofVersion", SpoofVersion, 2, SpoofVersion);
-        getConfigMemValueString((char *) file, file_size, GUI_SECTION, "AutoLaunchPrxLoader", AutoLaunchPrxLoader, 2, AutoLaunchPrxLoader);
         getConfigMemValueString((char *) file, file_size, GUI_SECTION, "HideCoverflowSortModeLabel", HideCoverflowSortModeLabel, 2, HideCoverflowSortModeLabel);
         getConfigMemValueString((char *) file, file_size, GUI_SECTION, "TimeoutByInactivity", TimeoutByInactivity, 2, TimeoutByInactivity);
         getConfigMemValueString((char *) file, file_size, GUI_SECTION, "SkipBDMirrorMsg", SkipBDMirrorMsg, 2, SkipBDMirrorMsg);
@@ -3324,7 +3312,6 @@ void read_settings()
         bUnmountDevBlind = strncmp(UnmountDevBlind, "0", 1);
         bCachedGameList = strncmp(CachedGameList, "0", 1);
         bHideCoverflowSortModeLabel = strncmp(HideCoverflowSortModeLabel, "0", 1);
-        bAutoLaunchPrxLoader = strncmp(AutoLaunchPrxLoader, "0", 1);
         bLoadMambaAndQuit = strncmp(LoadMambaAndQuit, "0", 1);
         bSkipBDMirrorMsg = strncmp(SkipBDMirrorMsg, "0", 1);
 
@@ -4567,6 +4554,10 @@ s32 main(s32 argc, const char* argv[])
     {
         int test = 0x100;
 
+        uint16_t mamba_version = 0;
+        if(use_cobra) sys8_mamba_version(&mamba_version);
+        if(use_mamba) is_mamba_v2 = (mamba_version != 0x0730);
+
         //check syscall8 status
         test = sys8_enable(0ULL);
         if((test & 0xff00) == 0x300)
@@ -4574,13 +4565,13 @@ s32 main(s32 argc, const char* argv[])
             if(payload_mode == ZERO_PAYLOAD)
             {
                 if(firmware== 0x341C)
-                        sprintf(payload_str, "payload-hermes - new syscall8 v%i (%slibfs_patched)", test & 0xff, is_libfs_patched()? "": "no ");
+                        sprintf(payload_str, "payload-hermes - new syscall%i v%i (%slibfs_patched)", (u16)SYSCALL_SK1E, test & 0xff, is_libfs_patched()? "": "no ");
                 else
                 {
                     if(use_mamba)
-                        sprintf(payload_str, "payload-sk1e - 'Mamba' syscall8 v%i (%slibfs_patched)", test & 0xff, is_libfs_patched()? "": "no ");
+                        sprintf(payload_str, "payload-sk1e sc%i - '%s v%X' syscall8 v%i (%slibfs_patched)", (u16)SYSCALL_SK1E, is_mamba_v2 ? "Mamba 2.x" : "Mamba 3.x", mamba_version, test & 0xff, is_libfs_patched()? "": "no ");
                     else if(use_cobra)
-                        sprintf(payload_str, "payload-sk1e - 'Cobra' syscall8 v%i (%slibfs_patched)", test & 0xff, is_libfs_patched()? "": "no ");
+                        sprintf(payload_str, "payload-sk1e sc%i - 'Cobra v%X' syscall8 v%i (%slibfs_patched)", (u16)SYSCALL_SK1E, mamba_version, test & 0xff, is_libfs_patched()? "": "no ");
                     else
                         sprintf(payload_str, "payload-sk1e - new syscall%i v%i (%slibfs_patched)", (u16)SYSCALL_SK1E, test & 0xff, is_libfs_patched()? "": "no ");
                 }
@@ -4588,9 +4579,9 @@ s32 main(s32 argc, const char* argv[])
             else if (payload_mode == SKY10_PAYLOAD)
             {
                 if(use_cobra && sys8_mamba() == 0x666)
-                    sprintf(payload_str, "payload-sk1e - 'Mamba' syscall8 v%i (%slibfs_patched)", test & 0xff, is_libfs_patched()? "": "no ");
+                    sprintf(payload_str, "payload-sk1e sc%i - '%s v%X' syscall8 v%i (%slibfs_patched)", (u16)SYSCALL_SK1E, is_mamba_v2 ? "Mamba 2.x" : "Mamba 3.x", mamba_version, test & 0xff, is_libfs_patched()? "": "no ");
                 else if(use_cobra)
-                    sprintf(payload_str, "payload-sk1e - 'Cobra' syscall8 v%i (%slibfs_patched)", test & 0xff, is_libfs_patched()? "": "no ");
+                    sprintf(payload_str, "payload-sk1e sc%i - 'Cobra v%X' syscall8 v%i (%slibfs_patched)", (u16)SYSCALL_SK1E, mamba_version, test & 0xff, is_libfs_patched()? "": "no ");
                 else
                     sprintf(payload_str, "payload-sk1e - new syscall%i v%i (%slibfs_patched)", (u16)SYSCALL_SK1E, test & 0xff, is_libfs_patched()? "": "no ");
             }
@@ -4674,7 +4665,7 @@ s32 main(s32 argc, const char* argv[])
         sys_map_path((char*)"//dev_bdvd", NULL);
 
         // Unmount game through webMAN
-        if(get_net_status() == SUCCESS) download_file("http://localhost/mount.ps3/unmount", NULL, 0, NULL);
+        if(get_net_status() == SUCCESS) call_webman("/mount.ps3/unmount");
     }
 
     show_http_errors = true;
@@ -4704,61 +4695,13 @@ s32 main(s32 argc, const char* argv[])
 
     if(use_cobra)
     {
-        sprintf(tmp_path, webman_path);
-        bAllowNetGames = file_exists(tmp_path);
+        bAllowNetGames = get_vsh_plugin_slot_by_name("WWWD") > 0;
 
-        if(bAllowNetGames == false)
+        if(!bAllowNetGames)
         {
-            int file_size = 0;
-            char *buff = LoadFile((char *) "/dev_hdd0/boot_plugins.txt", &file_size);
+            int slot = get_vsh_plugin_free_slot();
 
-            if(buff)
-            {
-                bAllowNetGames = (strstr(buff, "/webftp_server") != NULL);
-                free(buff);
-            }
-        }
-
-        if(bAllowNetGames == false)
-        {
-            int file_size = 0;
-            char *buff = LoadFile((char *) "/dev_hdd0/mamba_plugins.txt", &file_size);
-
-            if(buff)
-            {
-                bAllowNetGames = (strstr(buff, "/webftp_server") != NULL);
-                free(buff);
-            }
-        }
-
-        if(bAllowNetGames == false)
-        {
-            sprintf(tmp_path, "/dev_flash/vsh/module/webftp_server.sprx");
-            bAllowNetGames = file_exists(tmp_path);
-
-            if(bAllowNetGames == false)
-            {
-                sprintf(tmp_path, "/dev_hdd0/plugins/webftp_server_ps3mapi.sprx");
-                bAllowNetGames = file_exists(tmp_path);
-            }
-
-            if(bAllowNetGames == false)
-            {
-                sprintf(tmp_path, "/dev_hdd0/plugins/webftp_server.sprx");
-                bAllowNetGames = file_exists(tmp_path);
-            }
-
-            if(bAllowNetGames == false)
-            {
-                sprintf(tmp_path, "/dev_hdd0/webftp_server_ps3mapi.sprx");
-                bAllowNetGames = file_exists(tmp_path);
-            }
-
-            if(bAllowNetGames == false)
-            {
-                sprintf(tmp_path, "/dev_hdd0/webftp_server.sprx");
-                bAllowNetGames = file_exists(tmp_path);
-            }
+            if(file_exists(webman_path)) bAllowNetGames = (cobra_load_vsh_plugin(slot, webman_path, NULL, 0x0) == 0);
         }
     }
 
@@ -4906,7 +4849,6 @@ s32 main(s32 argc, const char* argv[])
     {
         syscall_40(1, 0); // disables PS3 Disc-less / load mamba
 
-        bAutoLaunchPrxLoader = false;
         fun_exit();
 
         restore_syscall8[1]= lv2peek(restore_syscall8[0]); // use mamba vector
@@ -5234,7 +5176,7 @@ s32 main(s32 argc, const char* argv[])
     ps3pad_read();
 
 
-    if((new_pad | old_pad) & (BUTTON_R1)) {bCachedGameList = false; bAutoLaunchPrxLoader = false;}
+    if((new_pad | old_pad) & (BUTTON_R1)) {bCachedGameList = false;}
 
     if (bFileManager || (new_pad | old_pad) & (BUTTON_L2 | BUTTON_R2))
     {
@@ -5346,13 +5288,15 @@ s32 main(s32 argc, const char* argv[])
         }
         // NTFS Automount
 
-        int signal_force = (fdevices == 0);
+        int signal_force = (fdevices == 0); scan_canceled = false;
 
         if(cached_game_list) {forcedevices = 0; fdevices_old = fdevices; signal_force = false; frame_count = 300; goto skip_refresh;}
 
 
         if(forcedevices || (frame_count & 63) == 0 || signal_force)
         {
+
+          if(refresh_game_list && (game_list_category == GAME_LIST_NETHOST && retro_mode == NET_GAMES)) {parse_mygames_xml(); refresh_game_list = false; bSkipParseXML = true; cached_game_list = true; bCachedGameList = false;}
 
           for(find_device = HDD0_DEVICE; find_device <= BDVD_DEVICE; find_device++)
           {
@@ -5802,8 +5746,7 @@ skip_bdvd:
 
                                             if(roms_count < max_roms && file_exists(cfg_path))
                                             {
-                                                sprintf(filename, "/%s:", (mounts[find_device]+k)->name);
-                                                int n = strlen(filename);
+                                                int n = sprintf(filename, "/%s:", (mounts[find_device]+k)->name);
 
                                                 sprintf(cfg_path, "%s/USRDIR/cores/snes-retroarch.cfg", self_path);
                                                 if(roms_count < max_roms && (retro_mode == RETRO_ALL || retro_mode == RETRO_SNES) && file_exists(cfg_path))
@@ -6019,7 +5962,7 @@ skip_refresh:
 
 
 //        x = (848 - 640) / 2; y = (512 - 360) / 2;
-//        DrawBox(x - 16, y - 16, 65535.0f, 640.0f + 32, 360 + 32, 0x00000028);
+//        DrawBox(x - 16, y - 16, 65535.0f, 640.0f + 32, 360 + 32, BLACK);
 //        DrawBox(x, y, 65535.0f, 640.0f, 360, 0x30003018);
 
 
@@ -6079,7 +6022,7 @@ skip_refresh:
                 update_twat(true);
                 DrawTextBox((848 - 300)/2,(512 - 300)/2, 0, 300, 300, ((u >= 64) ? 0xff : u<<2) | 0xffffff00);
                 SetCurrentFont(FONT_TTF);
-                SetFontColor(((u & 16)) ? 0x0 : 0xffffffff, 0x00000000);
+                SetFontColor(((u & 16)) ? BLACK : WHITE, BLACK);
 
                 SetFontSize(32, 48);
 
@@ -6693,9 +6636,9 @@ void draw_grid(float x, float y)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 18, 0x00000028);
+    DrawBox(x, y, 0, box_width, 18, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -6752,7 +6695,7 @@ void draw_grid(float x, float y)
         if(m == (ISO_FLAGS))
         {
             char *p = (char *) tmp_path + 1; while(*p && *p != ':') p++; if(*p == ':') p[1] = 0;
-            SetFontColor(0xafd836ff, 0x00000000);
+            SetFontColor(0xafd836ff, BLACK);
             x2 = DrawFormatString(x2, 0, "%s .ISO", (void *) (tmp_path + 1));
         }
         else
@@ -6768,7 +6711,7 @@ void draw_grid(float x, float y)
                         freeSpace[i] = (float) space;
                     }
 
-                    if(m == i) SetFontColor(0xafd836ff, 0x00000000); else SetFontColor(0xffffff44, 0x00000000);
+                    if(m == i) SetFontColor(0xafd836ff, BLACK); else SetFontColor(0xffffff44, BLACK);
 
                     if(i == HDD0_DEVICE)
                         x2 = DrawFormatString(x2, 0, "hdd0: %.2fGB ", freeSpace[i]);
@@ -6791,7 +6734,7 @@ void draw_grid(float x, float y)
 
         PS3GetDateTime(&hh, &mm, &ss, &day, &month, &year);
 
-        SetFontColor(0xffffffcc, 0x00000000);
+        SetFontColor(0xffffffcc, BLACK);
         SetFontSize(18, 24);
 
         SetFontAutoCenter(0);
@@ -6831,7 +6774,7 @@ void draw_grid(float x, float y)
 
     if(bShowPath)
     {
-        SetFontColor(0xffffffcc, 0x00000000);
+        SetFontColor(0xffffffcc, BLACK);
         SetCurrentFont(FONT_TTF);
         SetFontSize(10, 16);
 
@@ -6857,7 +6800,7 @@ void draw_grid(float x, float y)
     SetFontAutoCenter(0);
     SetFontSize(18, 20);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     y += 24;
 
@@ -6916,7 +6859,7 @@ void draw_grid(float x, float y)
 
             if(cover_mode || gui_mode == MODE_XMB_LIKE) f2 = 2.1f * ((float) (flash2 *(select_px == m && select_py == n))) / ((float) MAX_FLASH);
 
-            DrawBox(xx + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, (ww-8) + 8 * f2, (hh-8) + 8 * f2, 0x00000028 + (flash2 * f) );
+            DrawBox(xx + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, (ww-8) + 8 * f2, (hh-8) + 8 * f2, BLACK + (flash2 * f) );
 
             //draw Splited box
             //if(directories[currentgamedir].splitted)
@@ -7021,23 +6964,23 @@ void draw_grid(float x, float y)
                     if(Png_iscover[i] < 0) set_ps3_cover = 1;
                     else if(directories[get_currentdir(i)].flags & D_FLAG_HOMEB_DVD) set_ps3_cover = 1;
                     if(set_ps3_cover == 2 || set_ps3_cover == 4)
-                        DrawTextBoxCover(xx + FIX_X(16) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(160) + 8 * f2, (hh-8) + 8 * f2, (0xffffffff- (MAX_FLASH * 2 * f)) + (flash2 * 2 * f), set_ps3_cover - 1);
+                        DrawTextBoxCover(xx + FIX_X(16) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(160) + 8 * f2, (hh-8) + 8 * f2, (WHITE - (MAX_FLASH * 2 * f)) + (flash2 * 2 * f), set_ps3_cover - 1);
                     else
-                        DrawTextBoxCover(xx + FIX_X(36) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(124) + 8 * f2, (hh-8) + 8 * f2, (0xffffffff- (MAX_FLASH * 2 * f)) + (flash2 * 2 * f), set_ps3_cover - 1);
+                        DrawTextBoxCover(xx + FIX_X(36) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(124) + 8 * f2, (hh-8) + 8 * f2, (WHITE - (MAX_FLASH * 2 * f)) + (flash2 * 2 * f), set_ps3_cover - 1);
                 }
                 else if(set_ps3_cover && gui_mode != 0)
                 {
                     if(set_ps3_cover == 2 || set_ps3_cover == 4)
-                        DrawTextBoxCover(xx + FIX_X(16) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(160) + 8 * f2, (hh-8) + 8 * f2, (0xffffffff- (MAX_FLASH * 2 * f)) + (flash2 * 2 * f), set_ps3_cover - 1);
+                        DrawTextBoxCover(xx + FIX_X(16) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(160) + 8 * f2, (hh-8) + 8 * f2, (WHITE - (MAX_FLASH * 2 * f)) + (flash2 * 2 * f), set_ps3_cover - 1);
                     else
-                        DrawTextBoxCover(xx + FIX_X(36) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(124) + 8 * f2, (hh-8) + 8 * f2, (0xffffffff- (MAX_FLASH * 2 * f)) + (flash2 * 2 * f), set_ps3_cover - 1);
+                        DrawTextBoxCover(xx + FIX_X(36) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(124) + 8 * f2, (hh-8) + 8 * f2, (WHITE - (MAX_FLASH * 2 * f)) + (flash2 * 2 * f), set_ps3_cover - 1);
                 }
                 else if(Png_iscover[i] == -1)
-                    DrawTextBox(xx + FIX_X(25) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(142) + 8 * f2, (hh-8) + 8 * f2, (0xffffffff- (MAX_FLASH * 2 * f)) + (flash2 * 2 * f));
+                    DrawTextBox(xx + FIX_X(25) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(142) + 8 * f2, (hh-8) + 8 * f2, (WHITE - (MAX_FLASH * 2 * f)) + (flash2 * 2 * f));
                 else if(Png_iscover[i] == 1)
-                    DrawTextBox(xx + FIX_X(36) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(124) + 8 * f2, (hh-8) + 8 * f2, (0xffffffff- (MAX_FLASH * 2 * f)) + (flash2 * 2 * f));
+                    DrawTextBox(xx + FIX_X(36) + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, FIX_X(124) + 8 * f2, (hh-8) + 8 * f2, (WHITE - (MAX_FLASH * 2 * f)) + (flash2 * 2 * f));
                 else
-                    DrawTextBox(xx + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, (ww-8) + 8 * f2, (hh-8) + 8 * f2, (0xffffffff- (MAX_FLASH * 2 * f)) + (flash2 * 2 * f));
+                    DrawTextBox(xx + ww * m - 4 * f2, yy + n * hh - 4 * f2, 0, (ww-8) + 8 * f2, (hh-8) + 8 * f2, (WHITE - (MAX_FLASH * 2 * f)) + (flash2 * 2 * f));
 
                 //if((mode_favourites != 0) && favourites.list[i].index < 0) exit(0);
 
@@ -7144,7 +7087,7 @@ void draw_grid(float x, float y)
 
 
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     // display temperature
     if((frame_count & 0x100))
@@ -7165,16 +7108,16 @@ void draw_grid(float x, float y)
         x2 = DrawFormatString(1024, 0, " Temp CPU: 99ºC RSX: 99ºC ");
 
         y2 = y + 3 * 150 - 4 + 12;
-        SetFontColor(0xffffffff, 0x00000000);
+        SetFontColor(WHITE, BLACK);
         x2 = DrawFormatString(x + 4 * 200 - (x2 - 1024) - 12 , y2, " Temp CPU: ");
-        if(temp < 80) SetFontColor(0xfff000ff, 0x00000000); else SetFontColor(0xff0000ff, 0x00000000);
+        if(temp < 80) SetFontColor(0xfff000ff, BLACK); else SetFontColor(0xff0000ff, BLACK);
         x2 = DrawFormatString(x2, y2, "%uºC",  temp);
-        SetFontColor(0xffffffff, 0x00000000);
+        SetFontColor(WHITE, BLACK);
         x2 = DrawFormatString(x2, y2, " RSX: ");
-        if(temp2 < 75) SetFontColor(0xfff000ff, 0x00000000); else SetFontColor(0xff0000ff, 0x00000000);
+        if(temp2 < 75) SetFontColor(0xfff000ff, BLACK); else SetFontColor(0xff0000ff, BLACK);
         x2 = DrawFormatString(x2, y2, "%uºC ", temp2);
 
-        SetFontColor(0xffffffff, 0x00000000);
+        SetFontColor(WHITE, BLACK);
     }
     else if(Png_offset[i])
     {
@@ -7222,8 +7165,8 @@ void draw_grid(float x, float y)
     // draw game name
     i = selected;
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
-    SetFontColor(0xffffffee, 0x00000000);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
+    SetFontColor(0xffffffee, BLACK);
 
 
     if((Png_offset[i] && !mode_favourites) || (mode_favourites && favourites.list[i].title_id[0] != 0))
@@ -7317,7 +7260,7 @@ void draw_grid(float x, float y)
                                       Png_res[IMG_DIRECT_ICON].height, Png_res[IMG_DIRECT_ICON].wpitch,
                                       TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP,1);
 
-                DrawTextBox(xx + ww * select_px + ww - 52  + 8, yy + select_py * hh - 4 + hh - 36, 0, 32, 32, 0xffffffff);
+                DrawTextBox(xx + ww * select_px + ww - 52  + 8, yy + select_py * hh - 4 + hh - 36, 0, 32, 32, WHITE);
             }
         }
 
@@ -7331,7 +7274,7 @@ skip_overlays:
                               Png_res[IMG_FTP_ICON].height, Png_res[IMG_FTP_ICON].wpitch,
                               TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP,1);
 
-        DrawTextBox(290 /*200 * 4 -32*/, y - 32, 0, 64, 32, 0xffffffff);
+        DrawTextBox(290 /*200 * 4 -32*/, y - 32, 0, 64, 32, WHITE);
     }
 
     //SetCurrentFont(FONT_DEFAULT);
@@ -7366,9 +7309,9 @@ void draw_coverflow(float x, float y)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 18, 0x00000028);
+    DrawBox(x, y, 0, box_width, 18, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -7398,7 +7341,7 @@ void draw_coverflow(float x, float y)
 
         PS3GetDateTime(&hh, &mm, &ss, &day, &month, &year);
 
-        SetFontColor(0xffffffff, 0x00000000);
+        SetFontColor(WHITE, BLACK);
         SetCurrentFont(FONT_BUTTON);
 
         SetFontSize(8, 20);
@@ -7407,7 +7350,7 @@ void draw_coverflow(float x, float y)
 
         float y2 = y + 80;
 
-        y2 = y + 3 * 150 - 4 + 12 + 24;
+        y2 = y + (3 * 150 - 4) + 12 + 24;
         x2 = x;
 
         if(iTimeFormat == 2)
@@ -7461,7 +7404,7 @@ void draw_coverflow(float x, float y)
 
     SetFontAutoCenter(0);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetCurrentFont(FONT_TTF);
     SetFontSize(18, 20);
@@ -7496,7 +7439,7 @@ void draw_coverflow(float x, float y)
         if(m == (ISO_FLAGS))
         {
             char *p = (char *) tmp_path + 1; while(*p && *p != ':') p++; if(*p == ':') p[1] = 0;
-            SetFontColor(0xafd836ff, 0x00000000);
+            SetFontColor(0xafd836ff, BLACK);
             x2 = DrawFormatString(x2, 0, "%s .ISO", (void *) (tmp_path + 1));
         }
         else
@@ -7512,7 +7455,7 @@ void draw_coverflow(float x, float y)
                         freeSpace[i] = (float) space;
                     }
 
-                    if(m == i) SetFontColor(0xafd836ff, 0x00000000); else SetFontColor(0xffffff44, 0x00000000);
+                    if(m == i) SetFontColor(0xafd836ff, BLACK); else SetFontColor(0xffffff44, BLACK);
 
                     if(i == HDD0_DEVICE)
                         x2 = DrawFormatString(x2, 0, "hdd0: %.2fGB ", freeSpace[i]);
@@ -7527,7 +7470,7 @@ void draw_coverflow(float x, float y)
     SetFontAutoCenter(0);
     SetFontSize(18, 20);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     y += 24;
 
@@ -7750,16 +7693,16 @@ void draw_coverflow(float x, float y)
                     }
 
                     if(!set_ps3_cover)
-                        DrawBox(rel_posx[i] - centerx - 4 * f2, rel_posy[i] - 4 * f2, !f ? 100 : 0, rel_widthx[i] + 8 * f2, rel_widthy[i] + 8 * f2, 0x00000028);
+                        DrawBox(rel_posx[i] - centerx - 4 * f2, rel_posy[i] - 4 * f2, !f ? 100 : 0, rel_widthx[i] + 8 * f2, rel_widthy[i] + 8 * f2, BLACK);
 
                     if(!set_ps3_cover)
-                        DrawTextBoxLine(rel_posx[i] - centerx - 4 * f2, rel_posy[i] - 4 * f2, !f ? 100 : 0, rel_widthx[i] + 8 * f2, rel_widthy[i] + 8 * f2, 0xffffffff, color_line);
+                        DrawTextBoxLine(rel_posx[i] - centerx - 4 * f2, rel_posy[i] - 4 * f2, !f ? 100 : 0, rel_widthx[i] + 8 * f2, rel_widthy[i] + 8 * f2, WHITE, color_line);
                     else
-                        DrawTextBoxCover(rel_posx[i] - centerx - 4 * f2, rel_posy[i] - 4 * f2, !f ? 100 : 0, rel_widthx[i] + 8 * f2, rel_widthy[i] + 8 * f2, 0xffffffff, set_ps3_cover - 1);
+                        DrawTextBoxCover(rel_posx[i] - centerx - 4 * f2, rel_posy[i] - 4 * f2, !f ? 100 : 0, rel_widthx[i] + 8 * f2, rel_widthy[i] + 8 * f2, WHITE, set_ps3_cover - 1);
 
                     if(!set_ps3_cover)
                     {
-                        DrawBoxShadow(rel_posx[i] - centerx - 4 * f2, y + icony - 4 * f2 + 142 + 8 * f2 + 8, !f ? 100 : 0, rel_widthx[i] + 8 * f2, (rel_widthy[i]  * 5 / 8 + 8 * f2), 0x00000028);
+                        DrawBoxShadow(rel_posx[i] - centerx - 4 * f2, y + icony - 4 * f2 + 142 + 8 * f2 + 8, !f ? 100 : 0, rel_widthx[i] + 8 * f2, (rel_widthy[i]  * 5 / 8 + 8 * f2), BLACK);
                         DrawTextBoxShadow(rel_posx[i] - centerx - 4 * f2, y + icony - 4 * f2 + 142 + 8 * f2 + 8, !f ? 100 : 0, rel_widthx[i] + 8 * f2, (rel_widthy[i]  * 5 / 8 + 8 * f2), 0x60606090);
                     }
                     else
@@ -7906,7 +7849,7 @@ void draw_coverflow(float x, float y)
 
     }
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     // display temperature
     if((frame_count & 0x100))
@@ -7927,16 +7870,16 @@ void draw_coverflow(float x, float y)
         x2 = DrawFormatString(1024, 0, " Temp CPU: 99ºC RSX: 99ºC ");
 
         y2 = y + 3 * 150 - 4 + 12;
-        SetFontColor(0xffffffff, 0x00000000);
+        SetFontColor(WHITE, BLACK);
         x2 = DrawFormatString(x + 4 * 200 - (x2 - 1024) - 12 , y2, " Temp CPU: ");
-        if(temp < 80) SetFontColor(0xfff000ff, 0x00000000); else SetFontColor(0xff0000ff, 0x00000000);
+        if(temp < 80) SetFontColor(0xfff000ff, BLACK); else SetFontColor(0xff0000ff, BLACK);
         x2 = DrawFormatString(x2, y2, "%uºC",  temp);
-        SetFontColor(0xffffffff, 0x00000000);
+        SetFontColor(WHITE, BLACK);
         x2 = DrawFormatString(x2, y2, " RSX: ");
-        if(temp2 < 75) SetFontColor(0xfff000ff, 0x00000000); else SetFontColor(0xff0000ff, 0x00000000);
+        if(temp2 < 75) SetFontColor(0xfff000ff, BLACK); else SetFontColor(0xff0000ff, BLACK);
         x2 = DrawFormatString(x2, y2, "%uºC ", temp2);
 
-        SetFontColor(0xffffffff, 0x00000000);
+        SetFontColor(WHITE, BLACK);
     }
     else if(Png_offset[i])
     {
@@ -7969,9 +7912,9 @@ void draw_coverflow(float x, float y)
     // draw game name
     i = selected;
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
 
-    SetFontColor(0xffffffee, 0x00000000);
+    SetFontColor(0xffffffee, BLACK);
 
     if((Png_offset[i] && !mode_favourites) || (mode_favourites && favourites.list[i].title_id[0] != 0))
     {
@@ -8016,7 +7959,7 @@ void draw_coverflow(float x, float y)
         SetFontAutoCenter(1);
         SetFontColor(str_color, 0x00000020);
         DrawFormatString(0 , y + 80 - 32, " %s ", string_title_utf8);
-        SetFontColor(0xffffffff, 0x00000000);
+        SetFontColor(WHITE, BLACK);
 /*
         if(update_title_utf8)
         {
@@ -8118,14 +8061,14 @@ void draw_coverflow(float x, float y)
                                           Png_res[IMG_DIRECT_ICON].height, Png_res[IMG_DIRECT_ICON].wpitch,
                                           TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP,1);
 
-                    DrawTextBox(x + x2,  y + 3 * 150 - 48, 0, 32, 32, 0xffffffff);
+                    DrawTextBox(x + x2,  y + 3 * 150 - 48, 0, 32, 32, WHITE);
 
                     x2+= 40;
                 }
 
                 n = (directories[get_currentdir(i)].flags & D_FLAG_HDD0) ? game_cfg.bdemu : game_cfg.bdemu_ext;
 
-                SetFontColor(0xffffffee, 0x00000000);
+                SetFontColor(0xffffffee, BLACK);
                 SetCurrentFont(FONT_TTF);
                 SetFontSize(12, 24);
 
@@ -8152,7 +8095,7 @@ void draw_coverflow(float x, float y)
     if(bHideCoverflowSortModeLabel);
     else if(str_type == 1 || str_type == 2)
     {
-        SetFontColor(0xffffffee, 0x00000000);
+        SetFontColor(0xffffffee, BLACK);
         SetCurrentFont(FONT_TTF);
         SetFontSize(12, 24);
 
@@ -8167,7 +8110,7 @@ void draw_coverflow(float x, float y)
 
     if(bShowPath)
     {
-        SetFontColor(0xffffff88, 0x00000000);
+        SetFontColor(0xffffff88, BLACK);
         SetCurrentFont(FONT_TTF);
         SetFontSize(10, 16);
 
@@ -8181,7 +8124,7 @@ void draw_coverflow(float x, float y)
                               Png_res[IMG_FTP_ICON].height, Png_res[IMG_FTP_ICON].wpitch,
                               TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP,1);
 
-        DrawTextBox(200 * 4 -32, y + 3 * 150 - 48, 0, 64, 32, 0xffffffff);
+        DrawTextBox(200 * 4 -32, y + 3 * 150 - 48, 0, 64, 32, WHITE);
     }
 
     //SetCurrentFont(FONT_DEFAULT);
@@ -8251,7 +8194,6 @@ int gui_control()
                 {
                     SaveGameList();
 
-                    bAutoLaunchPrxLoader = false;
                     fun_exit();
 
                     // relaunch iris manager
@@ -8266,7 +8208,7 @@ int gui_control()
                 }
                 if (old_pad & (BUTTON_R2))
                 {
-                    if(DrawDialogYesNo(language[DRAWSCREEN_SHUTDOWN]) == YES) {SaveGameList(); set_install_pkg = bAutoLaunchPrxLoader = false; fun_exit(); sys_shutdown();}
+                    if(DrawDialogYesNo(language[DRAWSCREEN_SHUTDOWN]) == YES) {SaveGameList(); set_install_pkg = false; fun_exit(); sys_shutdown();}
                 }
                 else
                 {
@@ -8597,8 +8539,9 @@ autolaunch_proc:
                     // Mount Network Game through webMAN
                     if(bAllowNetGames && get_net_status() == SUCCESS)
                     {
-                        sprintf(tmp_path, "http://localhost/mount_ps3/%s", str_replace(str_replace(str_replace(str_replace(str_replace(directories[currentgamedir].path_name, " ", "%20"), "%26", "&"), "%3A", ":"), "%3F", "?"), "%2B", "+"));
-                        download_file(tmp_path, NULL, 0, NULL);
+                        sprintf(tmp_path, "/mount_ps3/%s", directories[currentgamedir].path_name);
+
+                        call_webman(tmp_path);
 
                         SaveGameList();
 
@@ -9130,7 +9073,7 @@ autolaunch_proc:
                         switch(i)
                         {
                           case -1:
-                            DrawDialogOK("Error: I cannot find PARAM.SFO for HOMELAUN1 (game broken)");
+                            DrawDialogOK("Error: PARAM.SFO was not found for HOMELAUN1 (game broken)");
                             goto skip_homebrew;
                           case -2:
                             DrawDialogOK("Error: External USB Loader not found! (install HOMELAUN1)");
@@ -9316,6 +9259,9 @@ autolaunch_proc:
 
             if (file_manager(tmp_path, NULL) == REFRESH_GAME_LIST) return_to_game_list(true);
 
+            get_grid_dimensions(true);
+            load_background_picture();
+
             frame_count = 0xFF; // force display temp
             return r;
         }
@@ -9351,7 +9297,10 @@ autolaunch_proc:
             if(strncmp(directories[indx].title_id, NETHOST, 9) == SUCCESS)
             {
                 sprintf(temp_buffer, (strncmp(directories[indx].path_name, "net", 3) ? "%s\n\nPath:\n%s" : "%s\n\nNetwork Path:\n%s"),
-                                                                                       directories[indx].title, str_replace(str_replace(str_replace(str_replace(str_replace(directories[indx].path_name, "%20", " "), "%26", "&"), "%3A", ":"), "%3F", "?"), "%2B", "+"));
+                                                                                       directories[indx].title, directories[indx].path_name);
+
+                urldec(temp_buffer);
+
                 DrawDialogOKTimer(temp_buffer, 5000.0f);
                 return r;
             }
@@ -9998,7 +9947,7 @@ ask_delete_item:
             mode_favourites = 0;
 
             force_ntfs_mount = true; frame_count = 62; ntfs_retry = MAX_NTFS_RETRY;
-            for(int i=0;i<8;i++) automountCount[i] = 2;
+            for(int i = 0; i < 8; i++) automountCount[i] = 2;
         }
         else if(old_pad & BUTTON_L2)
         {   // [L2 + R3] = select previous game list
@@ -10039,7 +9988,7 @@ ask_delete_item:
         else
         {   // [R3] = Select next game list
             force_ntfs_mount = true; frame_count = 62; ntfs_retry = MAX_NTFS_RETRY;
-            for(int i=0;i<8;i++) automountCount[i] = 2;
+            for(int i = 0; i < 8; i++) automountCount[i] = 2;
 
             read_settings();
 
@@ -10099,7 +10048,7 @@ void return_to_game_list(bool update)
         save_game_list_after_refresh = true;
 
         force_ntfs_mount = true; ntfs_retry = MAX_NTFS_RETRY;
-        for(int i=0;i<8;i++) automountCount[i] = 2;
+        for(int i = 0; i < 8; i++) automountCount[i] = 2;
 
         load_gamecfg(RESET_GAME_INFO); // force refresh game info
     }
@@ -10346,9 +10295,9 @@ void draw_device_mkiso(float x, float y, int index, char *path)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -10391,9 +10340,9 @@ void draw_device_mkiso(float x, float y, int index, char *path)
                                   TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP,1);
     }
 
-    DrawTextBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0xffffffff);
+    DrawTextBox(x, y, 0, box_width, box_height, WHITE);
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+    DrawBox(x, y, 0, box_width, box_height, BLACK);
 
     SetCurrentFont(FONT_TTF);
 
@@ -10462,9 +10411,9 @@ void draw_device_mkiso(float x, float y, int index, char *path)
 
     // draw game name
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     if(index >= 0)
     {
@@ -10472,7 +10421,7 @@ void draw_device_mkiso(float x, float y, int index, char *path)
 
         if(Png_offset[i])
         {
-            u32 str_color = 0xffffffff;
+            u32 str_color = WHITE;
 
             if((directories[currentgamedir].flags  & GAMELIST_FILTER) == BDVD_FLAG)
             {
@@ -10574,9 +10523,9 @@ void draw_device_xtiso(float x, float y, int index)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -10609,9 +10558,9 @@ void draw_device_xtiso(float x, float y, int index)
                                   TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP,1);
     }
 
-    DrawTextBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0xffffffff);
+    DrawTextBox(x, y, 0, box_width, box_height, WHITE);
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+    DrawBox(x, y, 0, box_width, box_height, BLACK);
 
     SetCurrentFont(FONT_TTF);
 
@@ -10647,15 +10596,15 @@ void draw_device_xtiso(float x, float y, int index)
 
     // draw game name
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     i = selected;
 
     if(Png_offset[i])
     {
-        u32 str_color = 0xffffffff;
+        u32 str_color = WHITE;
 
         if((directories[currentgamedir].flags  & GAMELIST_FILTER) == BDVD_FLAG)
         {
@@ -10756,9 +10705,9 @@ void draw_device_cpyiso(float x, float y, int index)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -10791,9 +10740,9 @@ void draw_device_cpyiso(float x, float y, int index)
                                   TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP,1);
     }
 
-    DrawTextBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0xffffffff);
+    DrawTextBox(x, y, 0, box_width, box_height, WHITE);
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+    DrawBox(x, y, 0, box_width, box_height, BLACK);
 
     SetCurrentFont(FONT_TTF);
 
@@ -10828,15 +10777,15 @@ void draw_device_cpyiso(float x, float y, int index)
 
     // draw game name
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     i = selected;
 
     if(Png_offset[i])
     {
-        u32 str_color = 0xffffffff;
+        u32 str_color = WHITE;
 
         if((directories[currentgamedir].flags  & GAMELIST_FILTER) == BDVD_FLAG)
         {
@@ -10913,7 +10862,8 @@ void draw_device_cpyiso(float x, float y, int index)
         }
         else
         {
-            DrawDialogOKTimer("Error:! Cannot copy in the same device\n\nError!: No se puede copiar en el mismo dispositivo", 2000.0f);
+            DrawDialogOKTimer("Error:! Cannot copy in the same device\n\n"
+                              "Error!: No se puede copiar en el mismo dispositivo", 2000.0f);
             menu_screen = SCR_MENU_ISO_OPTIONS;
             select_option = 3;
         }
@@ -10976,9 +10926,9 @@ void draw_options(float x, float y, int index)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -11014,7 +10964,7 @@ void draw_options(float x, float y, int index)
 
     if(mode_homebrew >= HOMEBREW_MODE)
     {
-        if(select_option < 2) select_option= 2;
+        if(select_option <  2) select_option= 2;
         if(select_option == 5) select_option= 6;
         if(select_option == 7) select_option= 8;
     }
@@ -11043,16 +10993,16 @@ void draw_options(float x, float y, int index)
                                   Png_res[IMG_DEFAULT_BACKGROUND].height, Png_res[IMG_DEFAULT_BACKGROUND].wpitch,
                                   TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP,1);
 
-        DrawTextBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0xffffffff);
+        DrawTextBox(x, y, 0, box_width, box_height, WHITE);
 
-        DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+        DrawBox(x, y, 0, box_width, box_height, BLACK);
     }
 
     y2 = y - 4;
 
     SetFontSize(12, 16);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     y2 = y + 12;
 
@@ -11097,21 +11047,21 @@ void draw_options(float x, float y, int index)
     if((directories[currentgamedir].flags & (BDVD_FLAG | PS1_FLAG)) == BDVD_FLAG)
     {
         n = sys_ss_media_id(BdId);
-        if(n == 0 || n== 0x80010006)
+        if(n == 0 || n == 0x80010006)
         {
             SetFontSize(10, 16);
             DrawFormatString(x + 32, y2, "BD ID: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
-                BdId[0], BdId[1], BdId[2], BdId[3], BdId[4], BdId[5], BdId[6], BdId[7],
-                BdId[8], BdId[9], BdId[10], BdId[11], BdId[12], BdId[13], BdId[14], BdId[15]);
+                                         BdId[0], BdId[1], BdId[2],  BdId[3],  BdId[4],  BdId[5],  BdId[6],  BdId[7],
+                                         BdId[8], BdId[9], BdId[10], BdId[11], BdId[12], BdId[13], BdId[14], BdId[15]);
         }
     }
-    else if((BdId[0] | BdId[1] | BdId[2] | BdId[3] | BdId[4] | BdId[5] | BdId[6] | BdId[7] |
+    else if((BdId[0] | BdId[1] | BdId[2]  | BdId[3]  | BdId[4]  | BdId[5]  | BdId[6]  | BdId[7] |
              BdId[8] | BdId[9] | BdId[10] | BdId[11] | BdId[12] | BdId[13] | BdId[14] | BdId[15]))
     {
         SetFontSize(10, 16);
         DrawFormatString(x + 32, y2, "BD ID: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
-            BdId[0], BdId[1], BdId[2], BdId[3], BdId[4], BdId[5], BdId[6], BdId[7],
-            BdId[8], BdId[9], BdId[10], BdId[11], BdId[12], BdId[13], BdId[14], BdId[15]);
+                                     BdId[0], BdId[1], BdId[2],  BdId[3],  BdId[4],  BdId[5],  BdId[6],  BdId[7],
+                                     BdId[8], BdId[9], BdId[10], BdId[11], BdId[12], BdId[13], BdId[14], BdId[15]);
 
     }
 
@@ -11128,15 +11078,15 @@ void draw_options(float x, float y, int index)
 
     // draw game name
 
-    DrawBox(x, y + 3 * 150 + 7, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150 + 7, 0, box_width, 40, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     i = selected;
 
     if(Png_offset[i])
     {
-        u32 str_color = 0xffffffff;
+        u32 str_color = WHITE;
 
         if((directories[currentgamedir].flags  & GAMELIST_FILTER) == BDVD_FLAG)
         {
@@ -11436,9 +11386,9 @@ void draw_iso_options(float x, float y, int index)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -11473,16 +11423,16 @@ void draw_iso_options(float x, float y, int index)
                                   Png_res[IMG_DEFAULT_BACKGROUND].height, Png_res[IMG_DEFAULT_BACKGROUND].wpitch,
                                   TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP,1);
 
-        DrawTextBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0xffffffff);
+        DrawTextBox(x, y, 0, box_width, box_height, WHITE);
 
-        DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+        DrawBox(x, y, 0, box_width, box_height, BLACK);
     }
 
     y2 = y + 8;
 
     SetFontSize(12, 16);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     y2 = y + 32;
 
@@ -11552,15 +11502,15 @@ void draw_iso_options(float x, float y, int index)
 
     // draw game name
 
-    DrawBox(x, y + 3 * 150 + 7, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150 + 7, 0, box_width, 40, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     i = selected;
 
     if(Png_offset[i])
     {
-        u32 str_color = 0xffffffff;
+        u32 str_color = WHITE;
 
         if((directories[currentgamedir].flags  & GAMELIST_FILTER) == BDVD_FLAG)
         {
@@ -11885,9 +11835,9 @@ void draw_configs(float x, float y, int index)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -11922,9 +11872,9 @@ void draw_configs(float x, float y, int index)
                                   TINY3D_TEX_FORMAT_A8R8G8B8,  TEXTWRAP_CLAMP, TEXTWRAP_CLAMP,1);
     }
 
-    DrawTextBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0xffffffff);
+    DrawTextBox(x, y, 0, box_width, box_height, WHITE);
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+    DrawBox(x, y, 0, box_width, box_height, BLACK);
 
     x2 = x;
     y2 = y + 32;
@@ -12005,13 +11955,13 @@ void draw_configs(float x, float y, int index)
 
     i = selected;
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     if(Png_offset[i])
     {
-        u32 str_color = 0xffffffff;
+        u32 str_color = WHITE;
 
         if((directories[currentgamedir].flags & GAMELIST_FILTER) == BDVD_FLAG)
         {
@@ -12219,9 +12169,9 @@ void draw_gbloptions(float x, float y)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -12233,14 +12183,14 @@ void draw_gbloptions(float x, float y)
 
     y += 24;
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+    DrawBox(x, y, 0, box_width, box_height, BLACK);
 
     y2 = y + 32 - 24;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWGLOPT_TOOLS], (flash && (select_option == -1)));
+    DrawButton1_UTF8(box_left, y2, 520, language[DRAWGLOPT_TOOLS], (flash && (select_option == -1)));
     y2+= 48;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWGLOPT_REFRESH], (flash && (select_option == 0)));
+    DrawButton1_UTF8(box_left, y2, 520, language[DRAWGLOPT_REFRESH], (flash && (select_option == 0)));
     y2+= 48;
 
     sprintf(temp_buffer, "%s: %s", language[DRAWGLOPT_CHANGEGUI], (gui_mode == MODE_COVERFLOW) ? "Coverflow" :
@@ -12261,7 +12211,7 @@ void draw_gbloptions(float x, float y)
 
     if(cover_mode) strcat(temp_buffer, cover_mode == 1 ? " + Cover" : cover_mode == 2 ? " + Box" : " + Box (ISO)");
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, temp_buffer, (flash && (select_option == 1)));
+    DrawButton1_UTF8(box_left, y2, 520, temp_buffer, (flash && (select_option == 1)));
     y2+= 48;
 
     if(background_sel == 0)
@@ -12280,16 +12230,16 @@ void draw_gbloptions(float x, float y)
     else
         sprintf(temp_buffer, "%s [Color %i]", language[DRAWGLOPT_CHANGEBCK], background_sel - 1);
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, temp_buffer, (flash && (select_option == 2)));
+    DrawButton1_UTF8(box_left, y2, 520, temp_buffer, (flash && (select_option == 2)));
     y2+= 48;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWGLOPT_SCRADJUST], (flash && (select_option == 3)));
+    DrawButton1_UTF8(box_left, y2, 520, language[DRAWGLOPT_SCRADJUST], (flash && (select_option == 3)));
     y2+= 48;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWGLOPT_CHANGEDIR], (flash && (select_option == 4)));
+    DrawButton1_UTF8(box_left, y2, 520, language[DRAWGLOPT_CHANGEDIR], (flash && (select_option == 4)));
     y2+= 48;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, (manager_cfg.opt_flags & OPTFLAGS_PLAYMUSIC)? language[DRAWGLOPT_SWMUSICOFF] : language[DRAWGLOPT_SWMUSICON] , (flash && (select_option == 5)));
+    DrawButton1_UTF8(box_left, y2, 520, (manager_cfg.opt_flags & OPTFLAGS_PLAYMUSIC)? language[DRAWGLOPT_SWMUSICOFF] : language[DRAWGLOPT_SWMUSICON] , (flash && (select_option == 5)));
     y2+= 48;
 
     bool bSelected = (flash && (select_option == 6));
@@ -12297,9 +12247,9 @@ void draw_gbloptions(float x, float y)
     if(!bAllowNetGames &&  !(net_option == 0 || (net_option >= 7 && net_option <= 13))) net_option = 0;
 
     if (net_option == 0)
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, (*ftp_ip_str) ? ftp_ip_str : language[DRAWGLOPT_INITFTP], bSelected);
+        DrawButton1_UTF8(box_left, y2, 520, (*ftp_ip_str) ? ftp_ip_str : language[DRAWGLOPT_INITFTP], bSelected);
     else
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, (net_option ==  1) ? "Mount /net_host0/PKG as /dev_bdvd" :
+        DrawButton1_UTF8(box_left, y2, 520, (net_option ==  1) ? "Mount /net_host0/PKG as /dev_bdvd" :
                                                    (net_option ==  2) ? "Mount /net_host0/VIDEO as /dev_bdvd" :
                                                    (net_option ==  3) ? "Mount /net_host1/PKG as /dev_bdvd" :
                                                    (net_option ==  4) ? "Mount /net_host1/VIDEO as /dev_bdvd" :
@@ -12315,20 +12265,20 @@ void draw_gbloptions(float x, float y)
 
     y2+= 48;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWTOOLS_COVERSDOWN], (flash && (select_option == 7)));
+    DrawButton1_UTF8(box_left, y2, 520, language[DRAWTOOLS_COVERSDOWN], (flash && (select_option == 7)));
     y2+= 48;
 
     if(select_option >= 7)
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWGLOPT_CREDITS], (flash && (select_option == 8)));
+        DrawButton1_UTF8(box_left, y2, 520, language[DRAWGLOPT_CREDITS], (flash && (select_option == 8)));
 
     y2+= 48;
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
     //y2+= 48;
 
     // draw sys version
     SetCurrentFont(FONT_TTF);
-    SetFontColor(0xccccffff, 0x00000000);
+    SetFontColor(0xccccffff, BLACK);
     SetFontAutoCenter(1);
 
     if(select_option == 1)
@@ -12506,7 +12456,7 @@ exit_gbloptions:
                   case 1: // Mount net0/PKG
                     if(bAllowNetGames && get_net_status() == SUCCESS)
                     {
-                        download_file("http://localhost/mount_ps3/net0/PKG", NULL, 0, NULL);
+                        call_webman("/mount_ps3/net0/PKG");
 
                         sprintf(temp_buffer, "Mounted /net_host0/PKG as /dev_bdvd\n\n%s", language[DRAWSCREEN_EXITXMB]);
                         if(DrawDialogYesNo(temp_buffer) == YES)
@@ -12518,7 +12468,7 @@ exit_gbloptions:
                   case 2: // Mount net0/VIDEO
                     if(bAllowNetGames && get_net_status() == SUCCESS)
                     {
-                        download_file("http://localhost/mount_ps3/net0/VIDEO", NULL, 0, NULL);
+                        call_webman("/mount_ps3/net0/VIDEO");
 
                         sprintf(temp_buffer, "Mounted /net_host0/VIDEO as /dev_bdvd");
 
@@ -12535,7 +12485,7 @@ exit_gbloptions:
                   case 3: // Mount net1/PKG
                     if(bAllowNetGames && get_net_status() == SUCCESS)
                     {
-                        download_file("http://localhost/mount_ps3/net1/PKG", NULL, 0, NULL);
+                        call_webman("/mount_ps3/net1/PKG");
 
                         sprintf(temp_buffer, "Mounted /net_host0/PKG as /dev_bdvd\n\n%s", language[DRAWSCREEN_EXITXMB]);
                         if(DrawDialogYesNo(temp_buffer) == YES)
@@ -12547,7 +12497,7 @@ exit_gbloptions:
                   case 4: // Mount net1/VIDEO
                     if(bAllowNetGames && get_net_status() == SUCCESS)
                     {
-                        download_file("http://localhost/mount_ps3/net1/VIDEO", NULL, 0, NULL);
+                        call_webman("/mount_ps3/net1/VIDEO");
 
                         sprintf(temp_buffer, "Mounted /net_host1/VIDEO as /dev_bdvd");
 
@@ -12565,7 +12515,7 @@ exit_gbloptions:
                     if(bAllowNetGames && get_net_status() == SUCCESS)
                     {
                         DrawDialogTimer("webMAN is refreshing My Games (XML)\n\nPlease wait ...", 1200.0f);
-                        download_file("http://localhost/refresh.ps3", NULL, 0, NULL);
+                        call_webman("/refresh.ps3");
 
                         //rescan network games
                         DrawDialogTimer("Scanning network games (webMAN)...", 1200.0f);
@@ -12585,7 +12535,7 @@ exit_gbloptions:
                     char* launchargv[2];
                     memset(launchargv, 0, sizeof(launchargv));
 
-                    launchargv[0] = (char*)malloc(27); strcpy(launchargv[0], "http://localhost/setup.ps3");
+                    launchargv[0] = (char*)malloc(27); strcpy(launchargv[0], "http://127.0.0.1/setup.ps3");
                     launchargv[1] = NULL;
 
                     sprintf(tmp_path, "%s/USRDIR/browser.self", self_path);
@@ -12975,9 +12925,9 @@ void draw_toolsoptions(float x, float y)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -12987,42 +12937,42 @@ void draw_toolsoptions(float x, float y)
 
     y += 24;
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+    DrawBox(x, y, 0, box_width, box_height, BLACK);
 
     y2 = y + 12;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWTOOLS_ARCHIVEMAN], (flash && (select_option == 0)));
+    DrawButton1_UTF8(box_left, y2, 520, language[DRAWTOOLS_ARCHIVEMAN], (flash && (select_option == 0)));
 
     y2+= 52;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWTOOLS_PKGTOOLS], (flash && (select_option == 1)));
+    DrawButton1_UTF8(box_left, y2, 520, language[DRAWTOOLS_PKGTOOLS], (flash && (select_option == 1)));
 
     y2+= 52;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWTOOLS_DELCACHE], (flash && (select_option == 2)));
+    DrawButton1_UTF8(box_left, y2, 520, language[DRAWTOOLS_DELCACHE], (flash && (select_option == 2)));
 
     y2+= 52;
 
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWTOOLS_COPYFROM], (flash && (select_option == 3)));
+    DrawButton1_UTF8(box_left, y2, 520, language[DRAWTOOLS_COPYFROM], (flash && (select_option == 3)));
 
     y2+= 52;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, (noBDVD == MODE_WITHBDVD) ? language[DRAWTOOLS_WITHBDVD] :
+    DrawButton1_UTF8(box_left, y2, 520, (noBDVD == MODE_WITHBDVD) ? language[DRAWTOOLS_WITHBDVD] :
                                                (noBDVD == MODE_DISCLESS) ? language[DRAWTOOLS_NOBDVD2]  :
                                                                            language[DRAWTOOLS_NOBDVD], (flash && (select_option == 4)));
 
     y2+= 52;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[DRAWTOOLS_LANGUAGE_1 + (manager_cfg.language & 0xF)], (flash && (select_option == 5)));
+    DrawButton1_UTF8(box_left, y2, 520, language[DRAWTOOLS_LANGUAGE_1 + (manager_cfg.language & 0xF)], (flash && (select_option == 5)));
 
     y2+= 52;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Spoof Console ID", (flash && (select_option == 6)));
+    DrawButton1_UTF8(box_left, y2, 520, "Spoof Console ID", (flash && (select_option == 6)));
 
     y2+= 52;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Control Fan & USB Wakeup", (flash && (select_option == 7)));
+    DrawButton1_UTF8(box_left, y2, 520, "Control Fan & USB Wakeup", (flash && (select_option == 7)));
 
 
 
@@ -13030,9 +12980,9 @@ void draw_toolsoptions(float x, float y)
 
     // draw game name
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     tiny3d_Flip();
     ps3pad_read();
@@ -13181,7 +13131,7 @@ void draw_toolsoptions(float x, float y)
 void draw_gamelist_options(float x, float y)
 {
 
-    float y2;
+    float y2, x2 = box_left;
 
     int max_options = 5;
 
@@ -13190,9 +13140,9 @@ void draw_gamelist_options(float x, float y)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -13207,55 +13157,58 @@ void draw_gamelist_options(float x, float y)
 
     y += 24;
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+    DrawBox(x, y, 0, box_width, box_height, BLACK);
 
     y2 = y + 12 * 3;
 
     if(opt_filter_by_device < HDD0_DEVICE || opt_filter_by_device >= 20)
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[GAMELIST_ALLGAMES], (flash && (select_option == 0)));
+        DrawButton1_UTF8(x2, y2, 520, language[GAMELIST_ALLGAMES], (flash && (select_option == 0)));
     else if(opt_filter_by_device == HDD0_DEVICE)
     {
         sprintf(temp_buffer, "%s /dev_hdd0", language[DRAWSCREEN_GAMES]);
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, temp_buffer, (flash && (select_option == 0)));
+        DrawButton1_UTF8(x2, y2, 520, temp_buffer, (flash && (select_option == 0)));
     }
     else if(opt_filter_by_device == BDVD_DEVICE)
     {
         sprintf(temp_buffer, "%s /dev_bdvd", language[DRAWSCREEN_GAMES]);
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, temp_buffer, (flash && (select_option == 0)));
+        DrawButton1_UTF8(x2, y2, 520, temp_buffer, (flash && (select_option == 0)));
     }
     else if(opt_filter_by_device > HDD0_DEVICE && opt_filter_by_device < BDVD_DEVICE)
     {
         sprintf(temp_buffer, "%s /dev_usb00%c", language[DRAWSCREEN_GAMES], 47 + opt_filter_by_device);
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, temp_buffer, (flash && (select_option == 0)));
+        DrawButton1_UTF8(x2, y2, 520, temp_buffer, (flash && (select_option == 0)));
     }
     else
     {
         sprintf(temp_buffer, "%s /ntfs%c", language[DRAWSCREEN_GAMES], 36 + opt_filter_by_device);
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, temp_buffer, (flash && (select_option == 0)));
+        DrawButton1_UTF8(x2, y2, 520, temp_buffer, (flash && (select_option == 0)));
     }
 
     y2+= 52;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[GAMELIST_PS3GAMES], (flash && (select_option == 1)));
+    DrawButton1_UTF8(x2, y2, 520, language[GAMELIST_PS3GAMES], (flash && (select_option == 1)));
 
     y2+= 52;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, "PlayStation® + PlayStation®2 + PSP", (flash && (select_option == 2)));
+    if(use_cobra && !is_mamba_v2)
+        DrawButton1_UTF8(x2, y2, 520, "PlayStation® + PlayStation®2 + PSP", (flash && (select_option == 2)));
+    else
+        DrawButton1_UTF8(x2, y2, 520, "PlayStation®", (flash && (select_option == 2)));
 
     y2+= 52;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[GAMELIST_VIDEOS], (flash && (select_option == 3)));
+    DrawButton1_UTF8(x2, y2, 520, language[GAMELIST_VIDEOS], (flash && (select_option == 3)));
 
     y2+= 52;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Homebrews", (flash && (select_option == 4)));
+    DrawButton1_UTF8(x2, y2, 520, "Homebrews", (flash && (select_option == 4)));
 
     y2+= 52;
 
 
     if(bAllowNetGames)
     {
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, language[GAMELIST_NETGAMES], (flash && (select_option == 5)));
+        DrawButton1_UTF8(x2, y2, 520, language[GAMELIST_NETGAMES], (flash && (select_option == 5)));
 
         y2+= 52;
 
@@ -13268,75 +13221,78 @@ void draw_gamelist_options(float x, float y)
     switch(retro_mode)
     {
      case RETRO_PSX:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "PlayStation® (PSX)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "PlayStation® (PSX)", bSelected);
         break;
      case RETRO_PS2:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "PlayStation®2 (PS2)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "PlayStation®2 (PS2)", bSelected);
         break;
      case RETRO_PSP:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "PlayStation® Portable (PSP)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "PlayStation® Portable (PSP)", bSelected);
         break;
      case RETRO_SNES:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Super Nintendo (SNES)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Super Nintendo (SNES)", bSelected);
         break;
      case RETRO_GBA:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Gameboy Advance (GBA)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Gameboy Advance (GBA)", bSelected);
         break;
      case RETRO_GEN:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Sega Genesis / Megadrive", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Sega Genesis / Megadrive", bSelected);
         break;
      case RETRO_NES:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Nintendo (NES)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Nintendo (NES)", bSelected);
         break;
      case RETRO_MAME:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: MAME / Arcade Games", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: MAME / Arcade Games", bSelected);
         break;
      case RETRO_FBA:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Final Burn Alpha (FBA)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Final Burn Alpha (FBA)", bSelected);
         break;
      case RETRO_QUAKE:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Quake", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Quake", bSelected);
         break;
      case RETRO_DOOM:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Doom", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Doom", bSelected);
         break;
      case RETRO_PCE:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: PC Engine / TurboGrafx (PCE)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: PC Engine / TurboGrafx (PCE)", bSelected);
         break;
      case RETRO_GBC:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Gameboy / Gameboy Color (GBC)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Gameboy / Gameboy Color (GBC)", bSelected);
         break;
      case RETRO_ATARI:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Atari 2600", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Atari 2600", bSelected);
         break;
      case RETRO_VBOY:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Nintendo Virtual Boy (VBOY)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Nintendo Virtual Boy (VBOY)", bSelected);
         break;
      case RETRO_NXE:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: NX Engine (Cave Story)", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: NX Engine (Cave Story)", bSelected);
         break;
      case RETRO_WSWAN:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: WonderSwan", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: WonderSwan", bSelected);
         break;
 
      case RETRO_A7800:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Atari 7800", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Atari 7800", bSelected);
         break;
      case RETRO_LYNX:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Atari Lynx", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Atari Lynx", bSelected);
         break;
      case RETRO_GW:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Game & Watch", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Game & Watch", bSelected);
         break;
      case RETRO_VECTX:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: Vectrex", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: Vectrex", bSelected);
         break;
      case RETRO_2048:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Retro: 2048", bSelected);
+        DrawButton1_UTF8(x2, y2, 520, "Retro: 2048", bSelected);
         break;
 
      default:
-        DrawButton1_UTF8((848 - 520) / 2, y2, 520, "PSX + PS2 + PSP + Retro", bSelected);
+        if(use_cobra && !is_mamba_v2)
+            DrawButton1_UTF8(x2, y2, 520, "PSX + PS2 + PSP + Retro", bSelected);
+        else
+            DrawButton1_UTF8(x2, y2, 520, "PSX + Retro", bSelected);
         break;
     }
 
@@ -13344,9 +13300,9 @@ void draw_gamelist_options(float x, float y)
 
     SetCurrentFont(FONT_TTF);
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
     SetFontAutoCenter(1);
     SetFontSize(14, 20);
 
@@ -13371,7 +13327,7 @@ void draw_gamelist_options(float x, float y)
     {
         while((new_pad | old_pad) & BUTTON_R3) ps3pad_read();
 
-        if(mode_homebrew == VIDEOS_MODE) select_option = 3;
+             if(mode_homebrew == VIDEOS_MODE)   select_option = 3;
         else if(mode_homebrew == HOMEBREW_MODE) select_option = 4;
         else if(game_list_category == GAME_LIST_PS3_ONLY)  select_option = 1;
         else if(game_list_category == (GAME_LIST_RETRO | GAME_LIST_NETHOST))
@@ -13398,7 +13354,7 @@ void draw_gamelist_options(float x, float y)
         bXMLScanOnlyNetGames = true;
 
         force_ntfs_mount = true; frame_count = 62; ntfs_retry = MAX_NTFS_RETRY;
-        for(int i=0;i<8;i++) automountCount[i] = 2;
+        for(int i = 0; i < 8; i++) automountCount[i] = 2;
 
         filter_by_device = opt_filter_by_device;
 
@@ -13407,6 +13363,7 @@ void draw_gamelist_options(float x, float y)
         {
             case 0: // all games
                 //DrawDialogTimer(language[GAMELIST_SCANNING0], 1200.0f);
+                retro_mode = RETRO_ALL;
                 game_list_category = GAME_LIST_ALL;
                 mode_homebrew = GAMEBASE_MODE;
                 mode_favourites = 0;
@@ -13451,7 +13408,7 @@ void draw_gamelist_options(float x, float y)
                 else
                 {
                     // net games
-                    retro_mode = NET_GAMES;
+                    retro_mode = NET_GAMES, filter_by_device = opt_filter_by_device = LIST_ALL_DEVICES; refresh_game_list = true;
 
                     if(old_pad & (BUTTON_SELECT | BUTTON_L2)) bXMLScanOnlyNetGames = false;
                 }
@@ -13571,11 +13528,15 @@ void draw_gamelist_options(float x, float y)
         {
             frame_count = 32;
             ROT_DEC(retro_mode, 0, 22);
+
+            if(is_mamba_v2 && (retro_mode == RETRO_PS2 || retro_mode == RETRO_PSP)) retro_mode = RETRO_PSX;
         }
         else if(new_pad & BUTTON_RIGHT)
         {
             frame_count = 32;
             ROT_INC(retro_mode, 22, 0);
+
+            if(is_mamba_v2 && (retro_mode == RETRO_PS2 || retro_mode == RETRO_PSP)) retro_mode = RETRO_SNES;
         }
     }
 }
@@ -13619,9 +13580,9 @@ void draw_cachesel(float x, float y)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -13636,7 +13597,7 @@ void draw_cachesel(float x, float y)
 
     y += 24;
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+    DrawBox(x, y, 0, box_width, box_height, BLACK);
 
 
     x2 = x;
@@ -13647,10 +13608,10 @@ void draw_cachesel(float x, float y)
         if(n < ncache_list)
         {
             sprintf(temp_buffer, "%s (%1.2f GB)", cache_list[n].title_id, ((double) cache_list[n].size) / GIGABYTES);
-            DrawButton1_UTF8((848 - 520) / 2, y2, 520, temp_buffer, (flash && select_option == n));
+            DrawButton1_UTF8(box_left, y2, 520, temp_buffer, (flash && select_option == n));
         }
         else
-            DrawButton1_UTF8((848 - 520) / 2, y2, 520, "", -1);
+            DrawButton1_UTF8(box_left, y2, 520, "", -1);
 
         y2+= 48;
     }
@@ -13659,20 +13620,20 @@ void draw_cachesel(float x, float y)
 
     // draw game name
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
 
 
     if(flash && cache_need_free != 0)
     {
         SetFontSize(20, 20);
-        SetFontColor(0xffff00ff, 0x00000000);
+        SetFontColor(0xffff00ff, BLACK);
         SetFontAutoCenter(1);
         DrawFormatString(0, y + 3 * 150 + 6, language[DRAWCACHE_ERRNEEDIT], cache_need_free);
         SetFontAutoCenter(0);
     }
     else if(select_option < ncache_list)
     {
-        SetFontColor(0xffffffff, 0x00000000);
+        SetFontColor(WHITE, BLACK);
 
         utf8_truncate(cache_list[select_option].title, temp_buffer, 65);
 
@@ -13690,7 +13651,7 @@ void draw_cachesel(float x, float y)
         SetFontAutoCenter(0);
     }
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
 
     tiny3d_Flip();
@@ -14019,9 +13980,9 @@ void draw_console_id_tools(float x, float y)
 
     // header title
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 20, 0x00000028);
+    DrawBox(x, y, 0, box_width, 20, BLACK);
 
-    SetFontColor(0xffffffff, 0x00000000);
+    SetFontColor(WHITE, BLACK);
 
     SetFontSize(18, 20);
 
@@ -14031,34 +13992,34 @@ void draw_console_id_tools(float x, float y)
 
     y += 24;
 
-    DrawBox(x, y, 0, 200 * 4 - 8, 150 * 3 - 8, 0x00000028);
+    DrawBox(x, y, 0, box_width, box_height, BLACK);
 
     x2 = x;
     y2 = y + 32;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Set new PSID", (flash && (select_option == 0)));
+    DrawButton1_UTF8(box_left, y2, 520, "Set new PSID", (flash && (select_option == 0)));
 
     y2+= 48;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Set new console id", (flash && (select_option == 1)));
+    DrawButton1_UTF8(box_left, y2, 520, "Set new console id", (flash && (select_option == 1)));
 
     y2+= 48;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Load PSID & console id", (flash && (select_option == 2)));
+    DrawButton1_UTF8(box_left, y2, 520, "Load PSID & console id", (flash && (select_option == 2)));
 
     y2+= 48;
 
-    DrawButton1_UTF8((848 - 520) / 2, y2, 520, "Restore default PSID & console id", (flash && (select_option == 3)));
+    DrawButton1_UTF8(box_left, y2, 520, "Restore default PSID & console id", (flash && (select_option == 3)));
 
 
     for(int n = 0; n < 5; n++) y2+= 48;
 
-    DrawBox(x, y + 3 * 150, 0, 200 * 4 - 8, 40, 0x00000028);
+    DrawBox(x, y + 3 * 150, 0, box_width, 40, BLACK);
 
     // draw sys version
     SetCurrentFont(FONT_TTF);
 
-    SetFontColor(0xccccffff, 0x00000000);
+    SetFontColor(0xccccffff, BLACK);
     SetFontSize(18, 20);
     SetFontAutoCenter(1);
 
@@ -14070,7 +14031,7 @@ void draw_console_id_tools(float x, float y)
     //Display Console id
     SetCurrentFont(FONT_TTF);
 
-    SetFontColor(0xeeffaaff, 0x00000000);
+    SetFontColor(0xeeffaaff, BLACK);
     SetFontSize(14, 16);
     SetFontAutoCenter(1);
     get_console_id_lv2();

@@ -101,6 +101,8 @@ int cobra_parse_cue(void *cue, uint32_t size, TrackDef *tracks, unsigned int max
 typedef s32 Lv2FsMode;
 typedef s32 Lv2FsFile;
 
+extern bool is_mamba_v2;
+
 extern int filter_by_letter;
 
 extern int num_box;
@@ -224,16 +226,20 @@ static void progress_callback(msgButton button, void *userdata)
     }
 }
 
-void ps3pad_poll()
+extern bool scan_canceled;
+
+bool ps3pad_poll()
 {
     pad_last_time = 0;
     ps3pad_read();
+
+    if((old_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE)) || (new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE))) {scan_canceled = true; return true;}
+
+    return false;
 }
 
 void wait_dialog()
 {
-
-
     while(!dialog_action)
     {
         sysUtilCheckCallback();
@@ -2006,7 +2012,7 @@ int delete_entries(t_directories *list, int *max, u32 flag)
 
 void fill_psx_iso_entries_from_device(char *path, u32 flag, t_directories *list, int *max)
 {
-    if(*max >= MAX_DIRECTORIES) return;
+    if(*max >= MAX_DIRECTORIES || scan_canceled) return;
 
     sysFSDirent dir;
     DIR_ITER *pdir = NULL;
@@ -2022,10 +2028,9 @@ void fill_psx_iso_entries_from_device(char *path, u32 flag, t_directories *list,
     {
         if(*max >= MAX_DIRECTORIES) break;
 
-        if(dir.d_name[0]=='.' && (dir.d_name[1]==0 || dir.d_name[1]=='.')) continue;
+        if(ps3pad_poll()) break;
 
-        ps3pad_poll();
-        if((old_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE)) || (new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE))) break;
+        if(dir.d_name[0]=='.' && (dir.d_name[1] == 0 || dir.d_name[1] == '.')) continue;
 
         if(!S_ISDIR(st.st_mode)) continue;
 
@@ -2080,7 +2085,7 @@ void fill_psx_iso_entries_from_device(char *path, u32 flag, t_directories *list,
 
 int fill_iso_entries_from_device(char *path, u32 flag, t_directories *list, int *max, unsigned long ioType)
 {
-    if(*max >= MAX_DIRECTORIES) return 0;
+    if(*max >= MAX_DIRECTORIES || scan_canceled) return 0;
 
     char *mem = malloc(1024);
 
@@ -2119,11 +2124,9 @@ int fill_iso_entries_from_device(char *path, u32 flag, t_directories *list, int 
     {
         if(*max >= MAX_DIRECTORIES) break;
 
+        if(ps3pad_poll()) break;
+
         if(dir.d_name[0]=='.' && (dir.d_name[1]==0 || dir.d_name[1]=='.')) continue;
-
-        ps3pad_poll();
-        if((old_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE)) || (new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE))) break;
-
 
         if(S_ISDIR(st.st_mode))
         {
@@ -2152,17 +2155,17 @@ int fill_iso_entries_from_device(char *path, u32 flag, t_directories *list, int 
         {
             if(strcmpext(dir.d_name, ".bin.enc")) continue;
         }
-        else if((flag & (PSP_FLAG)) == (PSP_FLAG))
+        else if(((flag & (PS2_FLAG)) == (PS2_FLAG)) || ((flag & (PSP_FLAG)) == (PSP_FLAG)))
         {
-            if(strcmpext(dir.d_name, ".iso")     && strcmpext(dir.d_name, ".ISO")) continue;
+            if(strcmpext(dir.d_name, ".iso") && strcmpext(dir.d_name, ".ISO")) continue;
         }
         else if(flag & (PS1_FLAG))
         {
-            int flen = dir.d_namlen - 4;
+            int flen = strlen(dir.d_name) - 4;
 
             if(flen < 0 || strcasestr(".iso|.bin|.mdf|.img", dir.d_name + flen) == NULL) continue;
         }
-        else if(strcmpext(dir.d_name, ".iso")   && strcmpext(dir.d_name, ".iso.0")) continue;
+        else if(strcmpext(dir.d_name, ".iso") && strcmpext(dir.d_name, ".iso.0")) continue;
 
         sprintf(list[*max].path_name, "%s/%s", path, dir.d_name);
 
@@ -2220,7 +2223,7 @@ int fill_iso_entries_from_device(char *path, u32 flag, t_directories *list, int 
         else if(strlen(name) > 4)
             name[strlen(name) - 4] = 0;  // ISO/MKV/MP4/MP3/AVI/MPG/FLV/WMV/ASF/etc.
 
-        if(is_ps2_classic && strcmp(name, "ISO")==0)
+        if(is_ps2_classic && strcmp(name, "ISO") == 0)
         {
             if(strstr(path, "[PS2"))
                 strcpy(name, strstr(path, "[PS2"));
@@ -2275,7 +2278,7 @@ int fill_iso_entries_from_device(char *path, u32 flag, t_directories *list, int 
             if(is_bd_iso ) sprintf(extension, "%s", "BDISO" );
 
             sprintf(ntfs_path, "/dev_hdd0/tmp/wmtmp/%s.ntfs[%s]", name, extension);
-            if(file_exists(ntfs_path)==false)
+            if(file_exists(ntfs_path) == false)
             {
                 snprintf(ntfs_path, MAX_PATH_LEN, "%s/%s", path, dir.d_name);
 
@@ -2472,8 +2475,12 @@ exit_function:
 
 void fill_directory_entries_with_alt_path(char *file, int n, char *retro_path, char *alt_path, t_directories *list, int *max, u32 flag)
 {
+    if(scan_canceled) return;
+
     file[n] = 0; strcat(file, retro_path);
     fill_iso_entries_from_device(file, flag | RETRO_FLAG, list, max, 0);
+
+    if(scan_canceled) return;
 
     if(roms_count < max_roms && ((strncmp(file, "/dev_hdd0", 9) == SUCCESS && strcmp(retro_path, alt_path) != SUCCESS) ||
                                  (strncmp(file, "/dev_hdd0", 9) != SUCCESS && strcasecmp(retro_path, alt_path) != SUCCESS)))
@@ -2485,6 +2492,8 @@ void fill_directory_entries_with_alt_path(char *file, int n, char *retro_path, c
 
 int fill_entries_from_device(char *path, t_directories *list, int *max, u32 flag, int sel, bool append)
 {
+    if(scan_canceled) return FAILED;
+
     DIR  *dir;
     char file[MAX_PATH_LEN];
 
@@ -2508,7 +2517,7 @@ int fill_entries_from_device(char *path, t_directories *list, int *max, u32 flag
 
         file[n] = 0; strcat(file, "/PS3ISO\0");
 
-        if(game_list_category == GAME_LIST_PS3_ONLY || game_list_category == GAME_LIST_ALL)
+        if((game_list_category == GAME_LIST_PS3_ONLY) || (game_list_category == GAME_LIST_ALL))
         {
             fill_iso_entries_from_device(file, flag, list, max, 0);
 
@@ -2516,49 +2525,63 @@ int fill_entries_from_device(char *path, t_directories *list, int *max, u32 flag
             fill_iso_entries_from_device(file, flag, list, max, 0);
         }
 
-        if(game_list_category == GAME_LIST_RETRO || game_list_category == GAME_LIST_ALL)
+        if((game_list_category == GAME_LIST_RETRO) || (game_list_category == GAME_LIST_ALL))
         {
-            if(retro_mode == RETRO_ALL || retro_mode == RETRO_PSX || retro_mode == RETRO_PSALL)
+            if((retro_mode == RETRO_ALL) || (retro_mode == RETRO_PSX) || (retro_mode == RETRO_PSALL))
             {
                 file[n] = 0; strcat(file, "/PSXISO\0");
                 fill_iso_entries_from_device(file, flag | PS1_FLAG, list, max, 0);
+                //fill_psx_iso_entries_from_device(file, flag | PS1_FLAG, list, max);
+
+                if(scan_canceled) return FAILED;
 
                 file[n] = 0; strcat(file, "/PSXISO [auto]\0");
                 fill_iso_entries_from_device(file, flag | PS1_FLAG, list, max, 0);
+                //fill_psx_iso_entries_from_device(file, flag | PS1_FLAG, list, max);
             }
 
-            if(retro_mode == RETRO_ALL || retro_mode == RETRO_PS2 || retro_mode == RETRO_PSALL)
+            if((retro_mode == RETRO_ALL) || (retro_mode == RETRO_PS2) || (retro_mode == RETRO_PSALL))
             {
                 file[n] = 0; strcat(file, ps2classic_path);
                 fill_iso_entries_from_device(file, flag | PS2_CLASSIC_FLAG, list, max, 0);
             }
 
-            if(use_cobra || is_mamba_v3)
+            if(scan_canceled) return FAILED;
+
+            if(use_cobra && !is_mamba_v2)
             {
-                if(retro_mode == RETRO_ALL || retro_mode == RETRO_PS2 || retro_mode == RETRO_PSALL)
+                if((retro_mode == RETRO_ALL) || (retro_mode == RETRO_PS2) || (retro_mode == RETRO_PSALL))
                 {
                     if(!strncmp(file, "/dev_hdd0", 9))
                     {
-                        file[n] = 0; strcat(file, "/PS2ISO\0");
+                        sprintf(file, "/dev_hdd0/PS2ISO");
                         fill_iso_entries_from_device(file, flag | PS2_FLAG, list, max, 0);
 
-                        file[n] = 0; strcat(file, "/PS2ISO [auto]\0");
+                        if(scan_canceled) return FAILED;
+
+                        sprintf(file, "/dev_hdd0/PS2ISO [auto]");
                         fill_iso_entries_from_device(file, flag | PS2_FLAG, list, max, 0);
                     }
                 }
 
-                if(retro_mode == RETRO_ALL || retro_mode == RETRO_PSP || retro_mode == RETRO_PSALL)
+                if(scan_canceled) return FAILED;
+
+                if((retro_mode == RETRO_ALL) || (retro_mode == RETRO_PSP) || (retro_mode == RETRO_PSALL))
                 {
-                    if(strncmp(file, "/dev_hdd0", 9))
+                    if(strncmp(file, "/dev_hdd0", 9) != 0)
                     {
                         file[n] = 0; strcat(file, "/ISO\0");
                         fill_iso_entries_from_device(file, flag | PSP_FLAG, list, max, 0);
                     }
 
+                    if(scan_canceled) return FAILED;
+
                     file[n] = 0; strcat(file, "/PSPISO\0");
                     fill_iso_entries_from_device(file, flag | PSP_FLAG, list, max, 0);
                 }
             }
+
+            if(scan_canceled) return FAILED;
 
             //RETRO
             char cfg_path[MAXPATHLEN];
@@ -2566,61 +2589,61 @@ int fill_entries_from_device(char *path, t_directories *list, int *max, u32 flag
             if(roms_count < max_roms && file_exists(cfg_path))
             {
                 sprintf(cfg_path, "%s/USRDIR/cores/snes-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_SNES) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_SNES) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_snes_path, "/ROMS/snes", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/gba-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_GBA) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_GBA) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_gba_path, "/ROMS/vba", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/gen-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_GEN) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_GEN) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_gen_path, "/ROMS/gen", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/nes-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_NES) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_NES) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_nes_path, "/ROMS/fceu", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/mame-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_MAME) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_MAME) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_mame_path, "/ROMS/mame", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/fba-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_FBA) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_FBA) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_fba_path, "/ROMS/fba", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/quake-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_QUAKE) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_QUAKE) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_quake_path, "/ROMS/pak", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/doom-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_DOOM) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_DOOM) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_doom_path, "/ROMS/prb", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/pce-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_PCE) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_PCE) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_pce_path, "/ROMS/pce", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/gbc-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_GBC) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_GBC) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_gbc_path, "/ROMS/gbc", list, max, flag);
 
@@ -2629,55 +2652,55 @@ int fill_entries_from_device(char *path, t_directories *list, int *max, u32 flag
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/atari-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_ATARI) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_ATARI) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_atari_path, "/ROMS/atari", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/vb-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_VBOY) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_VBOY) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_atari_path, "/ROMS/vboy", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/nxe-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_NXE) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_NXE) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_atari_path, "/ROMS/nxe", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/wswan-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_WSWAN) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_WSWAN) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_wswan_path, "/ROMS/wsw", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/a7800-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_A7800) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_A7800) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_a7800_path, "/ROMS/a7800", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/lynx-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_LYNX) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_LYNX) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_lynx_path, "/ROMS/lynx", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/gw-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_GW) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_GW) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_gw_path, "/ROMS/gw", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/vectrex-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_VECTX) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_VECTX) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_vectrex_path, "/ROMS/vectrex", list, max, flag);
                 }
 
                 sprintf(cfg_path, "%s/USRDIR/cores/2048-retroarch.cfg", self_path);
-                if((retro_mode == RETRO_ALL || retro_mode == RETRO_2048) && (roms_count < max_roms) && file_exists(cfg_path))
+                if(((retro_mode == RETRO_ALL) || retro_mode == RETRO_2048) && (roms_count < max_roms) && file_exists(cfg_path))
                 {
                     fill_directory_entries_with_alt_path(file, n, retro_2048_path, "/ROMS/2048", list, max, flag);
                 }
@@ -2686,6 +2709,8 @@ int fill_entries_from_device(char *path, t_directories *list, int *max, u32 flag
             }
         }
     }
+
+    if(scan_canceled) return FAILED;
 
     if(sel >= HOMEBREW_MODE && (use_cobra || use_mamba) && /*noBDVD == MODE_DISCLESS &&*/ append == false)
     {
@@ -2715,11 +2740,12 @@ int fill_entries_from_device(char *path, t_directories *list, int *max, u32 flag
         fill_iso_entries_from_device(file, D_FLAG_HOMEB | D_FLAG_HOMEB_MKV | (flag  & GAMELIST_FILTER), list, max, 0);
     }
 
+    if(scan_canceled) return FAILED;
 
     // add PSX Games
-    if((append == false) && (sel == GAMEBASE_MODE) && (game_list_category == GAME_LIST_ALL ||
-                                                      (game_list_category == GAME_LIST_RETRO &&
-                                                      (retro_mode == RETRO_ALL || retro_mode == RETRO_PSX || retro_mode == RETRO_PSALL))))
+    if((append == false) && (sel == GAMEBASE_MODE) && ((game_list_category == GAME_LIST_ALL) ||
+                                                      ((game_list_category == GAME_LIST_RETRO) &&
+                                                      ((retro_mode == RETRO_ALL) || (retro_mode == RETRO_PSX) || (retro_mode == RETRO_PSALL)))))
     {
         int n;
         strncpy(file, path, MAX_PATH_LEN);
@@ -2779,10 +2805,9 @@ int fill_entries_from_device(char *path, t_directories *list, int *max, u32 flag
 
         if(!entry) break;
 
-        if(entry->d_name[0] == '.' && (entry->d_name[1] == 0 || entry->d_name[1] == '.')) continue;
+        if(ps3pad_poll()) break;
 
-        ps3pad_poll();
-        if((old_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE)) || (new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE))) break;
+        if(entry->d_name[0] == '.' && (entry->d_name[1] == 0 || entry->d_name[1] == '.')) continue;
 
         if(!(entry->d_type & DT_DIR)) continue;
 
@@ -2837,6 +2862,8 @@ int fill_entries_from_device(char *path, t_directories *list, int *max, u32 flag
         {
             sprintf(file, "%s/EBOOT.BIN", list[*max].path_name);
         }
+
+        if(ps3pad_poll()) break;
 
         if(stat(file, &s) < 0)  continue;
 
@@ -3957,9 +3984,7 @@ int fast_copy_process()
 
         tiny3d_Flip();
 
-        ps3pad_poll();
-
-        if ((new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE)))
+        if(ps3pad_poll())
         {
             abort_copy = 1;
             DPrintf("%s \n", language[GLUTIL_ABORTEDUSER]);
@@ -4302,9 +4327,7 @@ static int my_game_countsize(char *path)
                 tiny3d_Flip();
             }
 
-            ps3pad_poll();
-
-            if(new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE))
+            if(ps3pad_poll())
             {
                 abort_copy = 1;
             }
@@ -4390,11 +4413,9 @@ static int my_game_delete(char *path)
 
             tiny3d_Flip();
 
-            ps3pad_poll();
-
             if(abort_copy) break;
 
-            if (new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE))  abort_copy = 1;
+            if(ps3pad_poll())  abort_copy = 1;
 
             if(abort_copy) break;
         }
@@ -4878,9 +4899,7 @@ void copy_from_selection(int game_sel)
 
             tiny3d_Flip();
 
-            ps3pad_poll();
-
-            if(new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE))
+            if(ps3pad_poll())
             {
                new_pad = 0;
                break;
@@ -5156,8 +5175,7 @@ void copy_from_bluray()
 
                 tiny3d_Flip();
 
-                ps3pad_poll();
-                if(new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE))
+                if(ps3pad_poll())
                 {
                    new_pad = 0;
                    break;
@@ -5399,8 +5417,7 @@ void copy_to_cache(int game_sel, char * hmanager_path)
 
             tiny3d_Flip();
 
-            ps3pad_poll();
-            if(new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE))
+            if(ps3pad_poll())
             {
                new_pad = 0;
                break;
@@ -5515,8 +5532,7 @@ void delete_game(int game_sel)
 
             tiny3d_Flip();
 
-            ps3pad_poll();
-            if(new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE | BUTTON_CROSS_))
+            if(ps3pad_poll())
             {
                new_pad = 0;
                break;
@@ -5745,8 +5761,7 @@ int FixDirectory(const char* path, int fcount)
             tiny3d_Flip();
         }
 
-        ps3pad_poll();
-        if((new_pad | old_pad) & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE)) return FAILED;
+        if(ps3pad_poll()) return FAILED;
 
         if (dir.d_type & DT_DIR)
         {
@@ -6728,8 +6743,7 @@ void copy_usb_to_iris(char * path)
 
             tiny3d_Flip();
 
-            ps3pad_poll();
-            if(new_pad & (BUTTON_CIRCLE_ | BUTTON_TRIANGLE))
+            if(ps3pad_poll())
             {
                new_pad = 0;
                break;
@@ -6743,4 +6757,87 @@ u64 string_to_ull( char *string )
     u64 ull;
     ull = strtoull( (const char *)string, NULL, 16 );
     return ull;
+}
+
+#define SYSCALL8_OPCODE_PS3MAPI			 			0x7777
+#define PS3MAPI_OPCODE_GET_VSH_PLUGIN_INFO			0x0047
+#define PS3MAPI_OPCODE_GET_CORE_MINVERSION			0x0012
+
+LV2_SYSCALL ps3mapi_get_core_minversion(void)
+{
+    lv2syscall2(SYSCALL_MAMBA, SYSCALL8_OPCODE_PS3MAPI, PS3MAPI_OPCODE_GET_CORE_MINVERSION);
+    return_to_user_prog(s32);
+}
+
+static void sys8_get_plugin_slot(unsigned int slot, char *tmp_name, char *tmp_filename)
+{
+    memset(tmp_name, 0, sizeof(tmp_name));
+    memset(tmp_filename, 0, sizeof(tmp_filename));
+
+    lv2syscall5(SYSCALL_MAMBA, SYSCALL8_OPCODE_PS3MAPI, PS3MAPI_OPCODE_GET_VSH_PLUGIN_INFO, (u64)slot, (u64)tmp_name, (u64)tmp_filename);
+}
+
+unsigned int get_vsh_plugin_slot_by_name(const char *name)
+{
+    char tmp_name[30];
+    char tmp_filename[256];
+    unsigned int slot;
+
+    bool find_free_slot = (!name || (*name == 0));
+
+    for (slot = 1; slot < 7; slot++)
+    {
+        sys8_get_plugin_slot(slot, tmp_name, tmp_filename);
+
+        if(find_free_slot) {if(*tmp_name) continue; return slot;}
+
+        if(!strcmp(tmp_name, name) || strstr(tmp_filename, name)) return slot;
+    }
+
+    return 0;
+}
+
+unsigned int get_vsh_plugin_free_slot(void)
+{
+    if(ps3mapi_get_core_minversion() == 0) return 6;
+
+    char tmp_name[30];
+    char tmp_filename[256];
+    int slot;
+
+    for (slot = 1; slot < 7; slot++)
+    {
+        memset(tmp_name, 0, sizeof(tmp_name));
+        memset(tmp_filename, 0, sizeof(tmp_filename));
+        lv2syscall5(SYSCALL_MAMBA, SYSCALL8_OPCODE_PS3MAPI, PS3MAPI_OPCODE_GET_VSH_PLUGIN_INFO, (u64)slot, (u64)tmp_name, (u64)tmp_filename);
+        if(strlen(tmp_filename) == 0 && strlen(tmp_name) == 0) {return slot;}
+    }
+
+    return FAILED;
+}
+
+void urldec(char *url)
+{
+	if(strchr(url, '%'))
+	{
+		u16 pos = 0; char c;
+		for(u16 i = 0; url[i] >= ' '; i++, pos++)
+		{
+			if(url[i] == '+')
+				url[pos] = ' ';
+			else if(url[i] != '%')
+				url[pos] = url[i];
+			else
+			{
+				url[pos] = 0; u8 n = 2;
+				while(n--)
+				{
+					url[pos] <<= 4, i++, c = (url[i] | 0x20);
+					if(c >= '0' && c <= '9') url[pos] += c -'0';      else
+					if(c >= 'a' && c <= 'f') url[pos] += c -'a' + 10;
+				}
+			}
+		}
+		url[pos] = 0;
+	}
 }

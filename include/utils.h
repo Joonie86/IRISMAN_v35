@@ -221,8 +221,13 @@ int game_update(char *title_id);
 int cover_update(char *title_id);
 int covers_update(int pass);
 int download_file(char *url, char *file, int mode, u64 *size);
+void call_webman(const char *cmd);
 
+void urldec(char *url);
 u64 string_to_ull( char *string );
+
+unsigned int get_vsh_plugin_slot_by_name(const char *name);
+unsigned int get_vsh_plugin_free_slot(void);
 
 int edit_title_param_sfo(char * file);
 #endif

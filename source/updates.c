@@ -17,6 +17,46 @@
 
 #define FS_S_IFMT 0170000
 
+// ----------------------------------------------------
+#include <arpa/inet.h>
+
+#define ssend(socket, str)
+
+int closesocket(int socket);
+
+void call_webman(const char *cmd)
+{
+	struct sockaddr_in sin;
+	int s, len;
+
+	sin.sin_family = AF_INET;
+	sin.sin_addr.s_addr = 0x7F000001;	//127.0.0.1 (localhost)
+	sin.sin_port = htons(80);			//http port (80)
+	s = socket(AF_INET, SOCK_STREAM, 0);
+	if(s < 0)
+	{
+		return;
+	}
+
+	if(connect(s, (struct sockaddr *)&sin, sizeof(sin)) < 0)
+	{
+		return;
+	}
+
+
+	char http[strlen(cmd) + 24];
+
+	len = sprintf(http, "GET %s HTTP/1.0\r\n", cmd);
+
+	send(s, http, len, 0);
+
+	sleep(1);
+
+	shutdown(s, SHUT_RDWR);
+	closesocket(s);
+}
+// ----------------------------------------------------
+
 extern volatile int dialog_action ;
 void my_dialog(msgButton button, void *userdata);
 
@@ -448,12 +488,18 @@ int download_file(char *url, char *file, int mode, u64 *size)
     float parts = 0;
     float cpart;
 
+    bool show_http_errors_original = show_http_errors, is_local = false;
+
+    if(!url || *url == 0) show_http_errors = false; else
+    if(!memcmp(url, "http://127.0.0.1/", 17) || !memcmp(url, "http://localhost/", 17)) {show_http_errors = false; is_local = true;}
+
     int no_len_flag = (mode & 128) != 0;
     mode &= 127;
 
     use_async_fd = 128;
     my_f_async.flags = 0;
 
+    if(!file || *file == 0) show_http_errors = false; else
     if(mode == 2)
     {
         if(size)
@@ -475,7 +521,7 @@ int download_file(char *url, char *file, int mode, u64 *size)
     if (ret < 0) {if(show_http_errors) DrawDialogOKTimer("Error httpCreateClient", 2000.0f); goto err;}
     flags|= 2;
 
-    httpClientSetConnTimeout(clientID, 20000000);
+    httpClientSetConnTimeout(clientID, is_local ? 500000 : 20000000);
 
     httpClientSetUserAgent(clientID, TITLE_APP);
 
@@ -669,6 +715,8 @@ err:
     if(flags & 1) httpEnd();
     if(http_p) free(http_p);
     if(uri_p) free(uri_p);
+
+    show_http_errors = show_http_errors_original;
 
     return ret;
 }

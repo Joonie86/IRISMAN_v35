@@ -306,8 +306,7 @@ uint64_t sys8_path_table(uint64_t addr_table);
 */
 
 int sys8_mamba(void);
-
-
+int sys8_mamba_version(uint16_t *version);
 /*
 
 Developers notes:
