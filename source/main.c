@@ -3122,8 +3122,8 @@ void read_settings()
     char InstallMamba[2] = "1";
     char LoadMambaAndQuit[2] = "0";
 
-    spoof_version  = 0x480;
-    spoof_revision = 66412;
+    spoof_version  = 0x481;
+    spoof_revision = 66786;
 
     // set default values
     sprintf(covers_path, "%s/USRDIR/covers/", MM_PATH);
@@ -3497,7 +3497,6 @@ s32 main(s32 argc, const char* argv[])
         off_psid  = off_idps2 + 0x18ULL;
         payload_mode = is_payload_loaded_355dex();
     }
-
     else if(is_firm_355deh())
     {
         firmware  = 0x355E;
@@ -3507,7 +3506,6 @@ s32 main(s32 argc, const char* argv[])
         off_psid  = off_idps2 + 0x18ULL;
         payload_mode = is_payload_loaded_355deh();
     }
-
     else if(is_firm_421())
     {
         firmware  = 0x421C;
@@ -3844,6 +3842,33 @@ s32 main(s32 argc, const char* argv[])
         off_idps2 = 0x80000000004C4AF4ULL;
         off_psid  = off_idps2 + 0x18ULL;
         payload_mode = is_payload_loaded_480deh();
+    }
+    else if(is_firm_481())
+    {
+        firmware  = 0x481C;
+        //fw_ver    = 0xBBE4;
+        off_idps  = 0x80000000003E2E30ULL;
+        off_idps2 = 0x8000000000474AF4ULL;
+        off_psid  = off_idps2 + 0x18ULL;
+        payload_mode = is_payload_loaded_475();
+    }
+    else if(is_firm_481dex())
+    {
+        firmware  = 0x481D;
+        //fw_ver    = 0xBBE4;
+        off_idps  = 0x8000000000409A30ULL;
+        off_idps2 = 0x800000000049CAF4ULL;
+        off_psid  = off_idps2 + 0x18ULL;
+        payload_mode = is_payload_loaded_475dex();
+    }
+    else if(is_firm_481deh())
+    {
+        firmware  = 0x481E;
+        //fw_ver    = 0xBBE4;
+        off_idps  = 0x80000000004326B0ULL;
+        off_idps2 = 0x80000000004C4AF4ULL;
+        off_psid  = off_idps2 + 0x18ULL;
+        payload_mode = is_payload_loaded_475deh();
     }
 
     if(is_cobra_based()) use_cobra = true;
@@ -4423,6 +4448,7 @@ s32 main(s32 argc, const char* argv[])
         case 0x475C:
         case 0x476C:
         case 0x478C:
+        case 0x481C:
             set_bdvdemu_475(payload_mode);
             switch(payload_mode)
             {
@@ -4443,6 +4469,7 @@ s32 main(s32 argc, const char* argv[])
         case 0x475D:
         case 0x476D:
         case 0x478D:
+        case 0x481D:
             set_bdvdemu_475dex(payload_mode);
             switch(payload_mode)
             {
@@ -4463,6 +4490,7 @@ s32 main(s32 argc, const char* argv[])
         case 0x475E:
         case 0x476E:
         case 0x478E:
+        case 0x481E:
             set_bdvdemu_475deh(payload_mode);
             switch(payload_mode)
             {

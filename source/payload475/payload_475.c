@@ -103,10 +103,10 @@ int is_firm_475(void)
 {
    // TOC 4.75 (same as 4.76 & 4.78)
    u64 toc;
-   toc =peekq(0x8000000000003000ULL);
+   toc = peekq(0x8000000000003000ULL);
    if(toc == 0x800000000034FBB0ULL)
    {
-      return (peekq(0x80000000002FCB68ULL)==0x323031352F30342FULL); //timestamp: 2015/04
+      return (peekq(0x80000000002FCB68ULL) == 0x323031352F30342FULL); //timestamp: 2015/04/
    }
    else
    {
@@ -121,7 +121,7 @@ int is_firm_476(void)
    toc =peekq(0x8000000000003000ULL);
    if(toc == 0x800000000034FBB0ULL)
    {
-      return (peekq(0x80000000002FCB68ULL)==0x323031352F30382FULL); //timestamp: 2015/08
+      return (peekq(0x80000000002FCB68ULL) == 0x323031352F30382FULL); //timestamp: 2015/08/
    }
    else
    {
@@ -136,7 +136,22 @@ int is_firm_478(void)
    toc =peekq(0x8000000000003000ULL);
    if(toc == 0x800000000034FBB0ULL)
    {
-      return (peekq(0x80000000002FCB68ULL)==0x323031352F31322FULL); //timestamp: 2015/12
+      return (peekq(0x80000000002FCB68ULL) == 0x323031352F31322FULL); //timestamp: 2015/12/
+   }
+   else
+   {
+      return 0;
+   }
+}
+
+int is_firm_481(void)
+{
+   // TOC 4.81
+   u64 toc;
+   toc = peekq(0x8000000000003000ULL);
+   if(toc == 0x800000000034FBB0ULL)
+   {
+      return (peekq(0x80000000002FCB68ULL) == 0x323031362F31302FULL); //timestamp: 2016/10/
    }
    else
    {
@@ -264,10 +279,10 @@ void load_payload_475(int mode)
 {
 
 //Remove Lv2 memory protection, NOT needed for REBUG 4.7x
-    lv1poke(0x370F28 + 0, 0x0000000000000001ULL); // Original: 0x0000000000351FD8ULL
-    lv1poke(0x370F28 + 8, 0xE0D251B556C59F05ULL); // Original: 0x3B5B965B020AE21AULL
-    lv1poke(0x370F28 + 16, 0xC232FCAD552C80D7ULL); // Original: 0x7D6F60B118E2E81BULL
-    lv1poke(0x370F28 + 24, 0x65140CD200000000ULL); // Original: 0x315D8B7700000000ULL
+    lv1poke(0x370F28 + 0x00, 0x0000000000000001ULL); // Original: 0x0000000000351FD8ULL
+    lv1poke(0x370F28 + 0x08, 0xE0D251B556C59F05ULL); // Original: 0x3B5B965B020AE21AULL
+    lv1poke(0x370F28 + 0x10, 0xC232FCAD552C80D7ULL); // Original: 0x7D6F60B118E2E81BULL
+    lv1poke(0x370F28 + 0x18, 0x65140CD200000000ULL); // Original: 0x315D8B7700000000ULL
 
     install_lv2_memcpy();
 
