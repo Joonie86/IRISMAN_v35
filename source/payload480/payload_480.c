@@ -103,7 +103,11 @@ int is_firm_480(void)
 {
    // TOC 4.80
    u64 toc;
+<<<<<<< HEAD
    toc =peekq(0x8000000000003000ULL);
+=======
+   toc = peekq(0x8000000000003000ULL);
+>>>>>>> refs/remotes/aldostools/master
    if(toc == 0x800000000034FBA0ULL)
    {
       return 1;

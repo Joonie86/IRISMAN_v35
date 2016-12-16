@@ -142,7 +142,11 @@ int ftp_init()
 */
 
         char dlgmsg[256];
-        sprintf(dlgmsg, "OpenPS3FTP %s by jjolano (Twitter: @jjolano)\nWebsite: http://jjolano.dashhacks.com\nDonations: http://bit.ly/gB8CJo\nStatus: FTP Server Active (%s port 21)\n\nPress OK to exit this program.",
+        sprintf(dlgmsg, "OpenPS3FTP %s by jjolano (Twitter: @jjolano)\n"
+                        "Website: http://jjolano.dashhacks.com\n"
+                        "Donations: http://bit.ly/gB8CJo\n"
+                        "Status: FTP Server Active (%s port 21)\n\n"
+                        "Press OK to exit this program.",
             OFTP_VERSION, info.ip_address);
 
         //msgDialogOpen2(mt_ok, dlgmsg, dialog_handler, NULL, NULL);

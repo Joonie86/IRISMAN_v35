@@ -106,7 +106,7 @@ int is_firm_475dex(void)
    toc =peekq(0x8000000000003000ULL);
    if(toc == 0x80000000003758E0ULL)
    {
-      return (peekq(0x800000000031EF48ULL)==0x323031352F30342FULL); //timestamp: 2015/04
+      return (peekq(0x800000000031EF48ULL) == 0x323031352F30342FULL); //timestamp: 2015/04/
    }
    else
    {
@@ -121,7 +121,7 @@ int is_firm_476dex(void)
    toc =peekq(0x8000000000003000ULL);
    if(toc == 0x80000000003758E0ULL)
    {
-      return (peekq(0x800000000031EF48ULL)==0x323031352F30382FULL); //timestamp: 2015/08
+      return (peekq(0x800000000031EF48ULL) == 0x323031352F30382FULL); //timestamp: 2015/08/
    }
    else
    {
@@ -136,7 +136,22 @@ int is_firm_478dex(void)
    toc =peekq(0x8000000000003000ULL);
    if(toc == 0x80000000003758E0ULL)
    {
-      return (peekq(0x800000000031EF48ULL)==0x323031352F31322FULL); //timestamp: 2015/12
+      return (peekq(0x800000000031EF48ULL) == 0x323031352F31322FULL); //timestamp: 2015/12/
+   }
+   else
+   {
+      return 0;
+   }
+}
+
+int is_firm_481dex(void)
+{
+    // TOC 4.81 dex
+   u64 toc;
+   toc =peekq(0x8000000000003000ULL);
+   if(toc == 0x80000000003758E0ULL)
+   {
+      return (peekq(0x800000000031EF48ULL) == 0x323031362F31302FULL); //timestamp: 2016/10/
    }
    else
    {
@@ -293,9 +308,10 @@ void load_payload_475dex (int mode)
 
     //patches by deank for webMAN, I left them here just in case someone wants to play with, but basically the same thing with SYS36 patches below
 
-    /*
 			pokeq(0x800000000026D868ULL, 0x4E80002038600000ULL ); // fix 8001003C error  Original: 0x4E8000208003026CULL
 			pokeq(0x800000000026D870ULL, 0x7C6307B44E800020ULL ); // fix 8001003C error  Original: 0x3D6000473D201B43ULL
+
+    /*
             pokeq(0x8000000000059F5CULL, 0x63FF003D60000000ULL ); // fix 8001003D error  Original: 0x63FF003D419EFFD4ULL
 			pokeq(0x800000000005A020ULL, 0x3FE080013BE00000ULL ); // fix 8001003E error  Original: 0x3FE0800163FF003EULL
 
@@ -307,8 +323,8 @@ void load_payload_475dex (int mode)
 			pokeq(0x800000000005962CULL, 0xF821FE917C0802A6ULL ); // just restore the original
 			pokeq(0x800000000005C7ECULL, 0x419E0038E8610098ULL ); // just restore the original
     */
-    pokeq(0x8000000000059C00ULL, 0x386000012F830000ULL ); // ignore LIC.DAT check
-    pokeq(0x800000000022DAD0ULL, 0x38600000F8690000ULL ); // fix 0x8001002B / 80010017 errors (ported for DEX 2015-01-03)
+			pokeq(0x8000000000059C00ULL, 0x386000012F830000ULL ); // ignore LIC.DAT check
+			pokeq(0x800000000022DAD0ULL, 0x38600000F8690000ULL ); // fix 0x8001002B / 80010017 errors (ported for DEX 2015-01-03)
 
 
     /* BASIC PATCHES SYS36 */
@@ -321,8 +337,8 @@ void load_payload_475dex (int mode)
     _poke32(0x5A024, 0x3BE00000);  // fix 8001003E error -- 3.55 ok in 0x055F64 "li      %r31, 0"
 
     //Fix 0x8001003C error (incorrect version in sys_load_param) - It is present in the new game updates **/
-    _poke(0x26D86C, 0x386000007C6307B4); //
-    _poke32(0x26D86C + 0x10, 0x4E800020);  //
+    //_poke(0x26D86C, 0x386000007C6307B4); //
+    //_poke32(0x26D86C + 0x10, 0x4E800020);  //
 
     /*
         -002c3cf0  f8 01 00 b0 7c 9c 23 78  7c 7d 1b 78 4b d8 aa 1d  |....|.#x|}.xK...|

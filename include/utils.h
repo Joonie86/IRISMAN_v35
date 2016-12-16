@@ -93,6 +93,7 @@ extern int noBDVD;
 
 extern bool use_cobra;
 extern bool use_mamba;
+extern bool is_mamba_v3;
 
 extern char hdd_folder[64];
 extern char bluray_game[64];
@@ -183,6 +184,8 @@ bool is_audio(char *ext);
 bool is_audiovideo(char *ext);
 bool is_browser_file(char *ext);
 
+void filepath_check(char *file);
+
 u64 get_filesize(char *path);
 bool file_exists( char* path );
 char * get_extension(char *path);
@@ -218,8 +221,13 @@ int game_update(char *title_id);
 int cover_update(char *title_id);
 int covers_update(int pass);
 int download_file(char *url, char *file, int mode, u64 *size);
+void call_webman(const char *cmd);
 
+void urldec(char *url);
 u64 string_to_ull( char *string );
+
+unsigned int get_vsh_plugin_slot_by_name(const char *name);
+unsigned int get_vsh_plugin_free_slot(void);
 
 int edit_title_param_sfo(char * file);
 #endif

@@ -430,7 +430,11 @@ int get_controlfan_offsets()
        // enables sys_set_leds
        sys386_offset = 0x800000000000A47CULL;
 
+<<<<<<< HEAD
     } else if((firmware == 0x475C) || (firmware == 0x476C) || (firmware == 0x478C)) { // firmware 4.75-4.78 cex
+=======
+    } else if((firmware == 0x475C) || (firmware == 0x476C) || (firmware == 0x478C) || (firmware == 0x481C)) { // firmware 4.75-4.81 cex
+>>>>>>> refs/remotes/aldostools/master
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C6A8ULL;
@@ -441,7 +445,7 @@ int get_controlfan_offsets()
        // enables sys_set_leds
        sys386_offset = 0x800000000000A3FCULL;
 
-    } else if((firmware == 0x475D) || (firmware == 0x476D) || (firmware == 0x478D) || (firmware == 0x475E) || (firmware == 0x476E) || (firmware == 0x478E)) { // firmware 4.75-4.78 dex / deh
+    } else if((firmware == 0x475D) || (firmware == 0x476D) || (firmware == 0x478D) || (firmware == 0x481D) || (firmware == 0x475E) || (firmware == 0x476E) || (firmware == 0x478E) || (firmware == 0x481E)) { // firmware 4.75-4.81 dex / deh
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C728ULL;
@@ -453,6 +457,7 @@ int get_controlfan_offsets()
        sys386_offset = 0x800000000000A47CULL;
 
     } else if(firmware == 0x480C) { // firmware 4.80 cex
+<<<<<<< HEAD
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C6A4ULL;
@@ -484,31 +489,34 @@ static u64 payload_ctrl;
 #define SYSCALL8_OPCODE_PS3MAPI              0x7777ULL
 #define PS3MAPI_OPCODE_GET_VSH_PLUGIN_INFO   0x0047ULL
 #define PS3MAPI_OPCODE_GET_CORE_MINVERSION   0x0012ULL
+=======
+>>>>>>> refs/remotes/aldostools/master
 
-LV2_SYSCALL ps3mapi_get_core_minversion(void)
-{
-    lv2syscall2(SYSCALL_MAMBA, SYSCALL8_OPCODE_PS3MAPI, PS3MAPI_OPCODE_GET_CORE_MINVERSION);
-    return_to_user_prog(s32);
-}
+       // enables sys_game_get_temperature
+       sys383_offset = 0x800000000000C6A4ULL;
+       // enables sys_sm_get_fan_policy
+       sys409_offset = 0x8000000000009E38ULL;
+       // enables sys_sm_set_fan_policy
+       sys389_offset = 0x800000000000A334ULL;
+       // enables sys_set_leds
+       sys386_offset = 0x800000000000A3FCULL;
 
-static int get_vsh_plugin_free_slot(void)
-{
-    if(ps3mapi_get_core_minversion() == 0) return 6;
+    } else if((firmware == 0x480D) || (firmware == 0x480E)) { // firmware 4.80 dex / deh
 
-    char tmp_name[30];
-    char tmp_filename[256];
-    int slot;
-
-    for (slot = 1; slot < 7; slot++)
-    {
-        memset(tmp_name, 0, sizeof(tmp_name));
-        memset(tmp_filename, 0, sizeof(tmp_filename));
-        lv2syscall5(SYSCALL_MAMBA, SYSCALL8_OPCODE_PS3MAPI, PS3MAPI_OPCODE_GET_VSH_PLUGIN_INFO, (u64)slot, (u64)tmp_name, (u64)tmp_filename);
-        if(strlen(tmp_filename) == 0 && strlen(tmp_name) == 0) {return slot;}
+       // enables sys_game_get_temperature
+       sys383_offset = 0x800000000000C724ULL;
+       // enables sys_sm_get_fan_policy
+       sys409_offset = 0x8000000000009EB8ULL;
+       // enables sys_sm_set_fan_policy
+       sys389_offset = 0x800000000000A3B4ULL;
+       // enables sys_set_leds
+       sys386_offset = 0x800000000000A47CULL;
     }
 
-    return FAILED;
+    return (sys389_offset ? 1 : 0);
 }
+
+static u64 payload_ctrl;
 
 static int load_ps3_controlfan_sm_sprx()
 {
@@ -685,12 +693,13 @@ static u32 speed_table_default[8] = {
     0xA0,     // >= temp_control4 (62%)
 };
 
-static u32 temp_control_default[5] = {
+static u32 temp_control_default[6] = {
     62,
     68,
     70,
     72,
-    75
+    75,
+    80
 };
 
 enum fan_modes {
@@ -872,8 +881,9 @@ void load_controlfan_config()
         }
     }
 
-    set_fan_mode(fan_mode);
+    if(get_vsh_plugin_slot_by_name("WWWD") > 0) fan_mode = FANCTRL_DISABLED;
 
+    set_fan_mode(fan_mode);
 }
 
 void draw_controlfan_options()
@@ -1102,6 +1112,11 @@ void draw_controlfan_options()
         {
             switch(select_option)
             {
+                case 0:
+                    set_adjust = true;
+                    new_pad = BUTTON_LEFT;
+                    break;
+
                 case 1:
                     n = speed_table[0];
                     n--; if(n < 0x44) n = 0x44;
@@ -1208,6 +1223,11 @@ void draw_controlfan_options()
         {
             switch(select_option)
             {
+                case 0:
+                    set_adjust = true;
+                    new_pad = BUTTON_RIGHT;
+                    break;
+
                 case 1:
                     n = speed_table[0];
                     n++; if(n > 0xff) n = 0xff;
@@ -1308,6 +1328,21 @@ void draw_controlfan_options()
 
             }
             auto_r1 = 1;
+        }
+
+        if(new_pad & (BUTTON_SQUARE))
+        {
+            switch(select_option)
+            {
+                case 0:
+                    fan_mode = FANCTRL_DISABLED;
+                    set_adjust = true;
+                    break;
+                case 14:
+                    wakeup_time = 0;
+                    set_adjust = true;
+                    break;
+            }
         }
 
         if(new_pad & (BUTTON_START))
@@ -1427,7 +1462,7 @@ void draw_controlfan_options()
                 case 15:
                     memcpy((void *) temp_control, (void *) temp_control_default, sizeof(temp_control));
                     memcpy((void *) speed_table, (void *) speed_table_default, sizeof(speed_table));
-                    wakeup_time = 6;
+                    wakeup_time = 60;
                     fan_mode = FANCTRL_PAYLOAD;
                     set_adjust = true;
                     break;
@@ -1458,7 +1493,11 @@ void draw_controlfan_options()
                         sprintf(FANCONTROL_PATH, "%s/config/fancontrol.dat", self_path);
                         SaveFile((void *) (FANCONTROL_PATH), (void *) temp_buffer, n);
 
+                        set_adjust = false;
                     }
+                    else
+                        return;
+
                     break;
 
             }

@@ -107,7 +107,7 @@ int is_firm_475deh(void)
    toc = peekq(0x8000000000003000ULL);
    if(toc == 0x800000000039D440ULL)
    {
-      return (peekq(0x8000000000344B70ULL)==0x323031352F30342FULL); //timestamp: 2015/04
+      return (peekq(0x8000000000344B70ULL) == 0x323031352F30342FULL); //timestamp: 2015/04
    }
    else
    {
@@ -122,7 +122,7 @@ int is_firm_476deh(void)
    toc = peekq(0x8000000000003000ULL);
    if(toc == 0x800000000039D440ULL)
    {
-      return (peekq(0x8000000000344B70ULL)==0x323031352F30382FULL); //timestamp: 2015/08
+      return (peekq(0x8000000000344B70ULL) == 0x323031352F30382FULL); //timestamp: 2015/08/
    }
    else
    {
@@ -137,7 +137,22 @@ int is_firm_478deh(void)
    toc = peekq(0x8000000000003000ULL);
    if(toc == 0x800000000039D440ULL)
    {
-      return (peekq(0x8000000000344B70ULL)==0x323031352F31322FULL); //timestamp: 2015/12
+      return (peekq(0x8000000000344B70ULL) == 0x323031352F31322FULL); //timestamp: 2015/12/
+   }
+   else
+   {
+      return 0;
+   }
+}
+
+int is_firm_481deh(void)
+{
+    // TOC 4.81 deh
+   u64 toc;
+   toc = peekq(0x8000000000003000ULL);
+   if(toc == 0x800000000039D440ULL)
+   {
+      return (peekq(0x8000000000344B70ULL) == 0x323031362F31302FULL); //timestamp: 2016/10/
    }
    else
    {
@@ -323,7 +338,7 @@ void load_payload_475deh (int mode)
 
     //Fix 0x8001003C error (incorrect version in sys_load_param) - It is present in the new game updates **/
     _poke(0x26E534, 0x386000007C6307B4); //
-    _poke32(0x26E534 + 0x10, 0x4E800020);  //
+    _poke32(0x26E534 + 0x8, 0x4E800020);  //
 
     /*
         -002c3cf0  f8 01 00 b0 7c 9c 23 78  7c 7d 1b 78 4b d8 aa 1d  |....|.#x|}.xK...|

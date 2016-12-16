@@ -58,6 +58,7 @@
 #include <spu_soundlib.h>
 #include <audioplayer.h>
 
+int sys_game_get_temperature(int sel, u32 *temperature);
 void draw_device_mkiso(float x, float y, int index, char *path);
 void load_background_picture();
 
@@ -84,6 +85,7 @@ extern int noBDVD;
 
 extern bool use_cobra;
 extern bool use_mamba;
+extern bool is_mamba_v2;
 
 extern bool bAllowNetGames;
 
@@ -1088,6 +1090,8 @@ int CopyFile(char* path, char* path2)
 
     s32 flags = 0;
 
+    filepath_check(path2);
+
     if(is_ntfs_path(path )) flags|= CPY_FILE1_IS_NTFS;
     if(is_ntfs_path(path2)) flags|= CPY_FILE2_IS_NTFS;
 
@@ -1430,6 +1434,8 @@ int CopyDirectory(char* path, char* path2, char* path3)
     // avoid recursive-infinite copy
     if(!strncmp(path, path3, strlen(path3))) return SUCCESS;
 
+    filepath_check(path2);
+
     if(is_ntfs_path(path )) flags|= CPY_FILE1_IS_NTFS;
     if(is_ntfs_path(path2)) flags|= CPY_FILE2_IS_NTFS;
 
@@ -1752,7 +1758,6 @@ int copy_archive_file(char *path1, char *path2, char *file, u64 free)
                 sprintf(TEMP_PATH1, "%s/%s", path1, file);
                 sprintf(TEMP_PATH2, "%s/%s", path2, file);
             }
-
 
             ret = CopyFile(TEMP_PATH1, TEMP_PATH2);
             if(ret < 0) goto end;
@@ -4168,7 +4173,7 @@ int launch_iso_game(char *path, int mtype)
         cobra_send_fake_disc_eject_event();
     }
 
-    if((use_cobra && !use_mamba) &&
+    if((use_cobra && !is_mamba_v2) &&
        (mtype == EMU_PSP || strstr(path, "/PSPISO/") != NULL || strstr(path, "/ISO/") != NULL) &&
        !strcasecmp(path + strlen(path) - 4, ".iso"))
     {
@@ -4332,7 +4337,7 @@ mount_iso: ;
                     sprintf(TEMP_PATH, PLUGIN_ISO, self_path);
 
                     int r = cobra_load_vsh_plugin(0, TEMP_PATH, plugin_args, 0x10000);
-                    if (r == 0) {fun_exit(); SaveGameList(); exit(0);}
+                    if (r == 0) {SaveGameList(); fun_exit(); exit(0);}
 
                     sprintf(MEM_MESSAGE, "error %X loading sprx_iso plugin", r);
                     DrawDialogOK(MEM_MESSAGE);
@@ -4405,7 +4410,7 @@ mount_iso: ;
             if (ret == SUCCESS)
             {
                 cobra_send_fake_disc_insert_event();
-                {fun_exit(); SaveGameList(); exit(0);}
+                {SaveGameList(); fun_exit(); exit(0);}
             }
 
             for(int o = 1; o < 64; o++) if(files[o]) free(files[o]);
@@ -4468,7 +4473,7 @@ mount_with_mamba:
 
                 sprintf(TEMP_PATH1, PLUGIN_ISO, self_path);
                 int r = cobra_load_vsh_plugin(0, TEMP_PATH1, plugin_args, 0x10000);
-                if (r == 0) {fun_exit(); SaveGameList(); exit(0);}
+                if (r == 0) {SaveGameList(); fun_exit(); exit(0);}
 
                 sprintf(MEM_MESSAGE, "error %X loading sprx_iso plugin", r);
                 DrawDialogOK(MEM_MESSAGE);
@@ -4593,7 +4598,7 @@ int launch_iso_game_mamba(char *path, int mtype)
 
                     sprintf(TEMP_PATH1, PLUGIN_ISO, self_path);
 
-                    if (cobra_load_vsh_plugin(0, TEMP_PATH1, plugin_args, 0x10000) == 0) {fun_exit(); SaveGameList(); exit(0);}
+                    if (cobra_load_vsh_plugin(0, TEMP_PATH1, plugin_args, 0x10000) == 0) {SaveGameList(); fun_exit(); exit(0);}
                 }
                 else if(parts >= MAX_SECTIONS) DrawDialogOKTimer(".ISO is very fragmented", 2000.0f);
 
@@ -4655,7 +4660,7 @@ int launch_iso_game_mamba(char *path, int mtype)
                 if (ret == SUCCESS)
                 {
                     cobra_send_fake_disc_insert_event();
-                    {fun_exit(); SaveGameList(); exit(0);}
+                    {SaveGameList(); fun_exit(); exit(0);}
                 }
 
                 for(int o = 1; o < 64; o++) if(files[o]) free(files[o]);
@@ -4718,7 +4723,7 @@ int launch_iso_game_mamba(char *path, int mtype)
 
                     sprintf(TEMP_PATH1, PLUGIN_ISO, self_path);
                     int r = 0;
-                    if ((r = cobra_load_vsh_plugin(0, TEMP_PATH1, plugin_args, 0x10000)) == 0) {fun_exit(); SaveGameList(); exit(0);}
+                    if ((r = cobra_load_vsh_plugin(0, TEMP_PATH1, plugin_args, 0x10000)) == 0) {SaveGameList(); fun_exit(); exit(0);}
 
                     sprintf(MEM_MESSAGE, "error %X", r);
                     DrawDialogOK(MEM_MESSAGE);
@@ -4764,6 +4769,8 @@ int launch_iso_build(char *iso_path, char *src_path, bool run_showtime)
         cobra_send_fake_disc_eject_event();
     }
 
+    int iso_path_len = strlen(iso_path) - 4; if(iso_path_len < 0) return FAILED;
+
     uint8_t *plugin_args = malloc(0x20000);
 
     if(plugin_args)
@@ -4772,7 +4779,7 @@ int launch_iso_build(char *iso_path, char *src_path, bool run_showtime)
 
         if(file_exists((char*)plugin_args) == false) {free(plugin_args); DrawDialogOK("ERROR: ISO Plugin not found"); return FAILED;}
 
-        if(file_exists(src_path) == false) {sprintf(MEM_MESSAGE, "ERROR: %s could not be found", src_path); DrawDialogOK(MEM_MESSAGE); return FAILED;}
+        if(file_exists(src_path) == false) {free(plugin_args); sprintf(MEM_MESSAGE, "ERROR: %s could not be found", src_path); DrawDialogOK(MEM_MESSAGE); return FAILED;}
 
         u64 size;
         size = get_filesize(src_path);
@@ -4781,7 +4788,7 @@ int launch_iso_build(char *iso_path, char *src_path, bool run_showtime)
         sprintf(filename, "%s", get_filename(src_path));;
         create_fake_file_iso(iso_path, filename, size);
 
-        if(file_exists(iso_path) == false) {sprintf(MEM_MESSAGE, "ERROR: %s could not be found", iso_path); DrawDialogOK(MEM_MESSAGE); return FAILED;}
+        if(file_exists(iso_path) == false) {free(plugin_args); sprintf(MEM_MESSAGE, "ERROR: %s could not be found", iso_path); DrawDialogOK(MEM_MESSAGE); return FAILED;}
 
         int r = FAILED;
 
@@ -4807,6 +4814,7 @@ int launch_iso_build(char *iso_path, char *src_path, bool run_showtime)
                 if (size == 0) goto skip_load_ntfs;
                 sections_size[0] = size / 2048ULL;
                 sections[0x200/4] = 0;
+
                 int parts = 1;
 
                 if(parts < MAX_SECTIONS)
@@ -4820,14 +4828,13 @@ int launch_iso_build(char *iso_path, char *src_path, bool run_showtime)
                     p_args->num_sections = parts;
                     p_args->num_tracks = 0;
 
-
                     memcpy(plugin_args + sizeof(rawseciso_args), sections, parts * sizeof(uint32_t) + 0x200);
                     memcpy(plugin_args + sizeof(rawseciso_args) + (parts*sizeof(uint32_t) + 0x200), sections_size, parts * sizeof(uint32_t));
 
                     if(is_ntfs_file)
                     {
                         // save sectors file
-                        iso_path[strlen(iso_path)-4]=0; strcat(iso_path, ".ntfs[BDFILE]");
+                        iso_path[iso_path_len] = 0; strcat(iso_path, ".ntfs[BDFILE]");
 
                         int fd = ps3ntfs_open(iso_path, O_WRONLY | O_CREAT | O_TRUNC, 0777);
                         if(fd >= 0)
@@ -4892,7 +4899,7 @@ int launch_iso_build(char *iso_path, char *src_path, bool run_showtime)
                 if(is_ntfs_file)
                 {
                     // save sectors file
-                    iso_path[strlen(iso_path)-4]=0; strcat(iso_path, ".ntfs[BDFILE]");
+                    iso_path[iso_path_len] = 0; strcat(iso_path, ".ntfs[BDFILE]");
 
                     int fd = ps3ntfs_open(iso_path, O_WRONLY | O_CREAT | O_TRUNC, 0777);
                     if(fd >= 0)
@@ -4933,7 +4940,7 @@ int launch_iso_build(char *iso_path, char *src_path, bool run_showtime)
             if(run_showtime) {sprintf(TEMP_PATH, "/dev_bdvd/%s", name); launch_video(TEMP_PATH);}
         }
 
-        if(r==0) return SUCCESS;
+        if(r == 0) return SUCCESS;
 
         sprintf(MEM_MESSAGE, "error %X loading sprx_iso plugin", r);
         DrawDialogOK(MEM_MESSAGE);
@@ -5353,10 +5360,25 @@ void draw_file_manager()
         {
             DrawBox(0, 512 - 32, 0, 848, 32, BLUE5);
 
-            DrawLineBox(0, 512 - 32, 0, 848, 32, 0x2000ffff);
+            DrawLineBox(10, 512 - 32, 0, 848, 32, 0x2000ffff);
 
-            set_ttf_window(848 - 312, 512 - 32, 480, 32, WIN_AUTO_LF);
+            set_ttf_window(0, 512 - 32, 480, 32, WIN_AUTO_LF);
             display_ttf_string(0, 0, (char *) "- File Manager", 0x208098cf, 0, 32, 32);
+
+            // display temperature
+            static u32 temp = 0;
+            static u32 temp2 = 0;
+            static char temp_disp[64];
+
+            if(temp == 0 || (frame & 0x1f) == 0x0 )
+            {
+                sys_game_get_temperature(0, &temp);
+                sys_game_get_temperature(1, &temp2);
+                sprintf(temp_disp, "Temp CPU: %iºC RSX: %iºC", temp, temp2);
+            }
+
+            set_ttf_window(848 - 220, 512 - 30, 300, 32, WIN_AUTO_LF);
+            display_ttf_string(0, 0, temp_disp, 0xFFFFFF55, 0, 16, 32);
         }
 
 
@@ -6349,7 +6371,7 @@ int file_manager(char *pathw1, char *pathw2)
             if(new_pad & BUTTON_START) break;
             else if(new_pad & BUTTON_CIRCLE_)
             {
-                if(DrawDialogYesNo("Exit to XMB?") == YES) {fun_exit(); SaveGameList(); exit(0);}
+                if(DrawDialogYesNo("Exit to XMB?") == YES) {SaveGameList(); fun_exit(); exit(0);}
                 new_pad = 0;
             }
         }
@@ -6458,37 +6480,37 @@ int file_manager(char *pathw1, char *pathw2)
                         {
                             if(mount_option == 1)
                             {
-                                download_file("http://localhost/mount_ps3/net0/.", NULL, 0, NULL);
+                                call_webman("/mount_ps3/net0/.");
                                 DrawDialogTimer("Mounted /net_host0 as local /dev_bdvd", 2000.0f);
                             }
                             else if(mount_option == 2)
                             {
-                                download_file("http://localhost/mount_ps3/net0/PKG", NULL, 0, NULL);
+                                call_webman("/mount_ps3/net0/PKG");
                                 DrawDialogTimer("Mounted /net_host0/PKG as local /dev_bdvd", 2000.0f);
                             }
                             else if(mount_option == 3)
                             {
-                                download_file("http://localhost/mount_ps3/net0/VIDEO", NULL, 0, NULL);
+                                call_webman("/mount_ps3/net0/VIDEO");
                                 DrawDialogTimer("Mounted /net_host0/VIDEO as local /dev_bdvd", 2000.0f);
                             }
                             else if(mount_option == 4)
                             {
-                                download_file("http://localhost/mount_ps3/net1/.", NULL, 0, NULL);
+                                call_webman("/mount_ps3/net1/.");
                                 DrawDialogTimer("Mounted /net_host1 as local /dev_bdvd", 2000.0f);
                             }
                             else if(mount_option == 5)
                             {
-                                download_file("http://localhost/mount_ps3/net1/PKG", NULL, 0, NULL);
+                                call_webman("/mount_ps3/net1/PKG");
                                 DrawDialogTimer("Mounted /net_host1/PKG as local /dev_bdvd", 2000.0f);
                             }
                             else if(mount_option == 6)
                             {
-                                download_file("http://localhost/mount_ps3/net1/VIDEO", NULL, 0, NULL);
+                                call_webman("/mount_ps3/net1/VIDEO");
                                 DrawDialogTimer("Mounted /net_host1/VIDEO as local /dev_bdvd", 2000.0f);
                             }
                             else if(mount_option == 7)
                             {
-                                download_file("http://localhost/mount.ps3/unmount", NULL, 0, NULL);
+                                call_webman("/mount.ps3/unmount");
                                 DrawDialogTimer("Unmounted /dev_bdvd", 2000.0f);
 
                                 if(!strncmp(path1, "/dev_bdvd", 9)) {path1[1] = 0; nentries1 = 0;}
@@ -6590,7 +6612,7 @@ int file_manager(char *pathw1, char *pathw2)
                 {
                     if(exit_option == 1)
                     {
-                        if(DrawDialogYesNo("Exit to XMB?") == YES) {unlink_secure("/dev_hdd0/tmp/wm_request"); fun_exit(); SaveGameList(); exit(0);}
+                        if(DrawDialogYesNo("Exit to XMB?") == YES) {unlink_secure("/dev_hdd0/tmp/wm_request"); SaveGameList(); fun_exit(); exit(0);}
                     }
                     else
                     if(exit_option == 2)
@@ -7152,7 +7174,7 @@ int file_manager(char *pathw1, char *pathw2)
                          strcpy(path1, "/dev_hdd0/tmp/wmtmp\0"); nentries1 = pos1 = sel1 = 0; update_device_sizes = 1|2;
 
                          if(get_net_status() != SUCCESS) continue;
-                         download_file("http://localhost/refresh.ps3", NULL, 0, NULL);
+                         call_webman("/refresh.ps3");
                      }
                      else if(fm_pane && use_cobra && is_ntfs_path(path2))
                      {
@@ -7177,7 +7199,7 @@ int file_manager(char *pathw1, char *pathw2)
                          strcpy(path2, "/dev_hdd0/tmp/wmtmp\0"); nentries2 = pos2 = sel2 = 0; update_device_sizes = 1|2;
 
                          if(get_net_status() != SUCCESS) continue;
-                         download_file("http://localhost/refresh.ps3", NULL, 0, NULL);
+                         call_webman("/refresh.ps3");
                      }
                      else
                          sysLv2FsChmod(temp_buffer, FS_S_IFMT | 0777);
@@ -7251,7 +7273,7 @@ int file_manager(char *pathw1, char *pathw2)
                             {strcpy(path2, "/dev_bdvd\0"); nentries2 = pos2 = sel2 = 0;}
                      }
 
-                     if((mnt_mode == 1) || (old_pad & BUTTON_SELECT)) {fun_exit(); SaveGameList(); exit(0);}
+                     if((mnt_mode == 1) || (old_pad & BUTTON_SELECT)) {SaveGameList(); fun_exit(); exit(0);}
                  }
                  else
                  if(is_dir)
@@ -7270,7 +7292,7 @@ int file_manager(char *pathw1, char *pathw2)
                      else
                         {strcpy(path2, "/dev_bdvd\0"); nentries2 = pos2 = sel2 = 0;}
 
-                     if(mnt_mode == 1 || (old_pad & BUTTON_SELECT)) {fun_exit(); SaveGameList(); exit(0);}
+                     if(mnt_mode == 1 || (old_pad & BUTTON_SELECT)) {SaveGameList(); fun_exit(); exit(0);}
                  }
                  else
                  {
@@ -7497,11 +7519,11 @@ int file_manager(char *pathw1, char *pathw2)
                         {
                             if(bAllowNetGames && get_net_status() == SUCCESS)
                             {
-                                sprintf(temp_buffer, "http://localhost/mount_ps3%s", path1);
-                                char *url = str_replace(temp_buffer, " ", "%20");
+                                char *url = temp_buffer;
+                                sprintf(url, "/mount_ps3%s", path1);
+                                urldec(url);
 
-                                download_file(url, NULL, 0, NULL);
-                                if(url) free(url); url = NULL;
+                                call_webman(url);
 
                                 if((path2[1] == 0) || strcmp(path2, "/dev_bdvd") == SUCCESS) nentries2 = 0;
                                 frame = 300; //force refresh
@@ -7588,7 +7610,7 @@ int file_manager(char *pathw1, char *pathw2)
                     else if(!(entries1[sel1].d_type & IS_MARKED) && is_browser_file(ext))
                     {
                         if(strcasecmp(ext, ".html") == SUCCESS || strcasecmp(ext, ".htm") == SUCCESS)
-                            sprintf(TEMP_PATH, "http://localhost%s/%s", path1, entries1[sel1].d_name);
+                            sprintf(TEMP_PATH, "http://127.0.0.1%s/%s", path1, entries1[sel1].d_name);
                         else
                         {
                             sprintf(TEMP_PATH, "%s/USRDIR/temp.txt", self_path);
@@ -7607,18 +7629,18 @@ int file_manager(char *pathw1, char *pathw2)
                                 sprintf(TEMP_PATH2, "%s/USRDIR/temp.txt", self_path);
                                 CopyFile(TEMP_PATH1, TEMP_PATH2);
 
-                                sprintf(temp_buffer, "<body bgcolor=white text=blue leftmargin=0 rightmargin=0><font size=5>%s</font></br><iframe src='http://localhost/%s' border=0 ",
+                                sprintf(temp_buffer, "<body bgcolor=white text=blue leftmargin=0 rightmargin=0><font size=5>%s</font></br><iframe src='http://127.0.0.1/%s' border=0 ",
                                         entries1[sel1].d_name, TEMP_PATH1);
                             }
                             else
-                                sprintf(temp_buffer, "<body bgcolor=white text=blue leftmargin=0 rightmargin=0><font size=5>%s</font></br><iframe src='http://localhost/%s/%s' border=0 ",
+                                sprintf(temp_buffer, "<body bgcolor=white text=blue leftmargin=0 rightmargin=0><font size=5>%s</font></br><iframe src='http://127.0.0.1/%s/%s' border=0 ",
                                         entries1[sel1].d_name, path1, entries1[sel1].d_name);
 
                             strcat(temp_buffer, "width=100% height=100%></body>");
                             fputs (temp_buffer, fd);
                             fclose(fd);
 
-                            sprintf(TEMP_PATH, "http://localhost/%s/USRDIR/temp.html", self_path);
+                            sprintf(TEMP_PATH, "http://127.0.0.1/%s/USRDIR/temp.html", self_path);
                         }
 
                         char* launchargv[1];
@@ -7729,7 +7751,7 @@ int file_manager(char *pathw1, char *pathw2)
                                 unlink_secure(TEMP_PATH1);
                                 launch_iso_build(TEMP_PATH1, TEMP_PATH2, false);
 
-                                {fun_exit(); SaveGameList(); exit(0);}
+                                {SaveGameList(); fun_exit(); exit(0);}
                             }
 
                             if(!is_ntfs_path(path1))
@@ -7801,7 +7823,7 @@ int file_manager(char *pathw1, char *pathw2)
                                     launch_iso_build(TEMP_PATH1, TEMP_PATH2, false);
                                 }
 
-                                {fun_exit(); SaveGameList(); exit(0);}
+                                {SaveGameList(); fun_exit(); exit(0);}
                             }
                             continue;
                         }
@@ -8112,11 +8134,11 @@ int file_manager(char *pathw1, char *pathw2)
                         {
                             if(bAllowNetGames && get_net_status() == SUCCESS)
                             {
-                                sprintf(temp_buffer, "http://localhost/mount_ps3%s", path2);
-                                char *url = str_replace(temp_buffer, " ", "%20");
+                                char *url = temp_buffer;
+                                sprintf(url, "/mount_ps3%s", path2);
+                                urldec(url);
 
-                                download_file(url, NULL, 0, NULL);
-                                if(url) free(url); url = NULL;
+                                call_webman(url);
 
                                 if((path1[1] == 0) || strcmp(path1, "/dev_bdvd") == SUCCESS) nentries1 = 0;
                                 frame = 300; //force refresh
@@ -8203,7 +8225,7 @@ int file_manager(char *pathw1, char *pathw2)
                     else if(!(entries2[sel2].d_type & IS_MARKED) && is_browser_file(ext))
                     {
                         if(strcasecmp(ext, ".html") == SUCCESS || strcasecmp(ext, ".htm") == SUCCESS)
-                            sprintf(TEMP_PATH, "http://localhost%s/%s", path2, entries2[sel2].d_name);
+                            sprintf(TEMP_PATH, "http://127.0.0.1%s/%s", path2, entries2[sel2].d_name);
                         else
                         {
                             sprintf(TEMP_PATH, "%s/USRDIR/temp.txt", self_path);
@@ -8222,18 +8244,18 @@ int file_manager(char *pathw1, char *pathw2)
                                 sprintf(TEMP_PATH2, "%s/USRDIR/temp.txt", self_path);
                                 CopyFile(TEMP_PATH1, TEMP_PATH2);
 
-                                sprintf(temp_buffer, "<body bgcolor=white text=blue leftmargin=0 rightmargin=0><font size=5>%s</font></br><iframe src='http://localhost/%s' border=0 ",
+                                sprintf(temp_buffer, "%s%s</font></br><iframe src='http://127.0.0.1/%s' border=0 ", "<body bgcolor=white text=blue leftmargin=0 rightmargin=0><font size=5>",
                                         entries2[sel2].d_name, TEMP_PATH1);
                             }
                             else
-                                sprintf(temp_buffer, "<body bgcolor=white text=blue leftmargin=0 rightmargin=0><font size=5>%s</font></br><iframe src='http://localhost/%s/%s' border=0 ",
+                                sprintf(temp_buffer, "%s%s</font></br><iframe src='http://127.0.0.1/%s/%s' border=0 ", "<body bgcolor=white text=blue leftmargin=0 rightmargin=0><font size=5>",
                                         entries2[sel2].d_name, path2, entries2[sel2].d_name);
 
                             strcat(temp_buffer, "width=100% height=100%></body>");
                             fputs (temp_buffer, fd);
                             fclose(fd);
 
-                            sprintf(TEMP_PATH, "http://localhost/%s/USRDIR/temp.html", self_path);
+                            sprintf(TEMP_PATH, "http://127.0.0.1/%s/USRDIR/temp.html", self_path);
                         }
 
                         char* launchargv[1];
@@ -8344,7 +8366,7 @@ int file_manager(char *pathw1, char *pathw2)
                                 unlink_secure(TEMP_PATH1);
                                 launch_iso_build(TEMP_PATH1, TEMP_PATH2, false);
 
-                                {fun_exit(); SaveGameList(); exit(0);}
+                                {SaveGameList(); fun_exit(); exit(0);}
                             }
 
                             if(!is_ntfs_path(path2))
@@ -8416,7 +8438,7 @@ int file_manager(char *pathw1, char *pathw2)
                                     launch_iso_build(TEMP_PATH1, TEMP_PATH2, false);
                                 }
 
-                                {fun_exit(); SaveGameList(); exit(0);}
+                                {SaveGameList(); fun_exit(); exit(0);}
                             }
                             continue;
                         }

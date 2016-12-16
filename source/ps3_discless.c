@@ -25,7 +25,6 @@
 
 int zlib_decompress(char *source, char *dest, int in_size, int *out_size);
 
-
 extern int firmware;
 extern char self_path[MAXPATHLEN];
 
@@ -329,10 +328,29 @@ skip_the_load:
     return true;
 }
 
+/*
+static u64 lv1poke(u64 addr, u64 value)
+{
+    lv2syscall2(9, (u64) addr, (u64) value);
+    return_to_user_prog(u64);
+}
+*/
+
+#define MAMBA_PRX_LOADER_INSTALL_OFFSET				0x80000000007F0000ULL
+#define MAMBA_PRX_LOADER_SYSCALL_NUM				1022
+
+#define SYSCALL1022_OPCODE_LOAD_MAMBA			0x7755
+
+int syscall_load_mamba(char* payload_path)
+{
+    lv2syscall2(MAMBA_PRX_LOADER_SYSCALL_NUM, SYSCALL1022_OPCODE_LOAD_MAMBA, (uint64_t)payload_path);
+	return_to_user_prog(int);
+}
 
 bool load_ps3_mamba_payload()
 {
-    //DrawDialogOK("Label1");
+    bool use_lz = true;
+
     if(sys8_mamba() == 0x666) return true;  // MAMBA is already running
 
     if(!syscall_base)
@@ -341,31 +359,71 @@ bool load_ps3_mamba_payload()
         return false;
     }
 
-    char payload_file[MAXPATHLEN];
-    sprintf(payload_file, "%s/USRDIR/mamba/mamba_%X.lz.bin", self_path, firmware);
-
-#ifdef LASTPLAY_LOADER
-    //DrawDialogOK("Label2");
-    if(file_exists(payload_file) == false)
-        sprintf(payload_file, "/dev_hdd0/game/IRISMAN00/USRDIR/mamba/mamba_%X.lz.bin", firmware);
-#endif
-    //DrawDialogOK("Label3");
-    if(file_exists(payload_file) == false) return false;
-
     write_htab();
 
+
+    char payload_file[MAXPATHLEN];
+    int out_size = 0, file_size = 0;
+
+    ///// PRX_LOADER PAYLOAD FILE /////
+    sprintf(payload_file, "%s/USRDIR/payloads/payload_%X.bin", self_path, firmware);
+
+    uint64_t *payload = (uint64_t *) LoadFile((char *) payload_file, &file_size);
+    ///////////////////////////////////
+
+
+
+    ///// MAMBA_PRX_LOADER_INSTALL /////
+    lv2poke(0x80000000000004E8ULL, 0);						//Disable the disc-less payload (if it was previously loaded)
+    lv2poke(0x8000000000003D90ULL, 0x386000014E800020ULL);  //Patch permission 4.xx, usually "fixed" by warez payload
+
+    if(file_size > 3000 && file_size < 4200)
+    {
+        for(int i = 0; i < (file_size / 8); i++) lv2poke(MAMBA_PRX_LOADER_INSTALL_OFFSET + (i * 8), payload[i]);
+
+        free(payload);
+
+        // install prx loader payload
+        const uint64_t payload_opd = MAMBA_PRX_LOADER_INSTALL_OFFSET + file_size + 0x10;
+        lv2poke(payload_opd, MAMBA_PRX_LOADER_INSTALL_OFFSET);
+        lv2poke(syscall_base + (8 * MAMBA_PRX_LOADER_SYSCALL_NUM), payload_opd);
+
+        // install mamba 3.x
+        sprintf(payload_file, "%s/USRDIR/mamba/mamba_%X.bin", self_path, firmware);
+
+        if(file_exists(payload_file))
+        {
+            if (syscall_load_mamba(payload_file) != 0) return false;
+            return true;
+        }
+    }
+    /////////////////////////////////////
+
+
+    ///// MAMBA 2.x /////
+    sprintf(payload_file, "%s/USRDIR/mamba/mamba_%X.lz.bin", self_path, firmware);
+
+    if(file_exists(payload_file) == false)
+    {
+        sprintf(payload_file, "/dev_hdd0/game/IRISMAN00/USRDIR/mamba/mamba_%X.lz.bin", firmware);
+
+        if(file_exists(payload_file) == false)
+            {sprintf(payload_file, "%s/USRDIR/mamba/mamba_%X.bin", self_path, firmware); use_lz = false;}
+    }
+
+    if(file_exists(payload_file) == false) return false;
+    /////////////////////
+
     u64 *addr = (u64 *) memalign(128, 0x20000);
-    //DrawDialogOK("Label4");
+
     if(!addr)
     {
         DrawDialogOK("Memory is full");
         exit(0);
     }
 
-    memset((char *) addr, 0, 0x20000);
-    int out_size;
+    memset((char *) addr, 0, 0x20000); file_size = 0;
 
-    int file_size = 0;
     char *mamba_payload = LoadFile((char *) payload_file, &file_size);
 
     if(file_size < 20000)
@@ -376,7 +434,14 @@ bool load_ps3_mamba_payload()
         return false;
     }
 
-    zlib_decompress((char *) mamba_payload, (char *) addr, file_size, &out_size);
+    if(use_lz)
+    {
+        zlib_decompress((char *) mamba_payload, (char *) addr, file_size, &out_size);
+    }
+    else
+    {
+        out_size = file_size; memcpy(addr, mamba_payload, out_size);
+    }
 
     if(mamba_payload) free(mamba_payload);
 
@@ -393,7 +458,7 @@ bool load_ps3_mamba_payload()
     // install mamba in syscall 40 address ( when mamba is loaded, syscall 40 is disabled and syscalls 6,7,8,9,10,11 are created )
     for(u8 n = 0; n < 100; n++)
     {
-        lv2poke(lv2_mem, lv2_mem + 0x8ULL);
+            lv2poke(lv2_mem, lv2_mem + 0x8ULL);
         sys8_memcpy(lv2_mem + 8, (u64) addr, out_size);
 
 

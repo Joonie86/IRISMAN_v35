@@ -113,4 +113,3 @@ void strtoupper(char *str)
     do if(*str > 96 && *str < 123) *str &= 223;
     while(*str++);
 }
-
