@@ -430,11 +430,7 @@ int get_controlfan_offsets()
        // enables sys_set_leds
        sys386_offset = 0x800000000000A47CULL;
 
-<<<<<<< HEAD
-    } else if((firmware == 0x475C) || (firmware == 0x476C) || (firmware == 0x478C)) { // firmware 4.75-4.78 cex
-=======
     } else if((firmware == 0x475C) || (firmware == 0x476C) || (firmware == 0x478C) || (firmware == 0x481C)) { // firmware 4.75-4.81 cex
->>>>>>> refs/remotes/aldostools/master
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C6A8ULL;
@@ -457,40 +453,6 @@ int get_controlfan_offsets()
        sys386_offset = 0x800000000000A47CULL;
 
     } else if(firmware == 0x480C) { // firmware 4.80 cex
-<<<<<<< HEAD
-
-       // enables sys_game_get_temperature
-       sys383_offset = 0x800000000000C6A4ULL;
-       // enables sys_sm_get_fan_policy
-       sys409_offset = 0x8000000000009E38ULL;
-       // enables sys_sm_set_fan_policy
-       sys389_offset = 0x800000000000A334ULL;
-       // enables sys_set_leds
-       sys386_offset = 0x800000000000A3FCULL;
-
-    } else if((firmware == 0x480D) || (firmware == 0x480E)) { // firmware 4.80 dex / deh
-
-       // enables sys_game_get_temperature
-       sys383_offset = 0x800000000000C724ULL;
-       // enables sys_sm_get_fan_policy
-       sys409_offset = 0x8000000000009EB8ULL;
-       // enables sys_sm_set_fan_policy
-       sys389_offset = 0x800000000000A3B4ULL;
-       // enables sys_set_leds
-       sys386_offset = 0x800000000000A47CULL;
-
-    }
-
-    return (sys389_offset ? 1 : 0);
-}
-
-static u64 payload_ctrl;
-
-#define SYSCALL8_OPCODE_PS3MAPI              0x7777ULL
-#define PS3MAPI_OPCODE_GET_VSH_PLUGIN_INFO   0x0047ULL
-#define PS3MAPI_OPCODE_GET_CORE_MINVERSION   0x0012ULL
-=======
->>>>>>> refs/remotes/aldostools/master
 
        // enables sys_game_get_temperature
        sys383_offset = 0x800000000000C6A4ULL;

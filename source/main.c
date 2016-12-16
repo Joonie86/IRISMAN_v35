@@ -90,6 +90,7 @@ u32 snd_inited = 0;
 #include "payload480/payload_480.h"
 #include "payload480dex/payload_480dex.h"
 #include "payload480deh/payload_480deh.h"
+#include "payload481dex/payload_481dex.h"
 
 #include "spu_soundmodule.bin.h" // load SPU Module
 #include "spu_soundlib.h"
@@ -3843,8 +3844,6 @@ s32 main(s32 argc, const char* argv[])
         off_psid  = off_idps2 + 0x18ULL;
         payload_mode = is_payload_loaded_480deh();
     }
-<<<<<<< HEAD
-=======
     else if(is_firm_481())
     {
         firmware  = 0x481C;
@@ -3861,7 +3860,7 @@ s32 main(s32 argc, const char* argv[])
         off_idps  = 0x8000000000409A30ULL;
         off_idps2 = 0x800000000049CAF4ULL;
         off_psid  = off_idps2 + 0x18ULL;
-        payload_mode = is_payload_loaded_475dex();
+        payload_mode = is_payload_loaded_481dex();
     }
     else if(is_firm_481deh())
     {
@@ -3872,7 +3871,6 @@ s32 main(s32 argc, const char* argv[])
         off_psid  = off_idps2 + 0x18ULL;
         payload_mode = is_payload_loaded_475deh();
     }
->>>>>>> refs/remotes/aldostools/master
 
     if(is_cobra_based()) use_cobra = true;
 
@@ -4472,7 +4470,6 @@ s32 main(s32 argc, const char* argv[])
         case 0x475D:
         case 0x476D:
         case 0x478D:
-        case 0x481D:
             set_bdvdemu_475dex(payload_mode);
             switch(payload_mode)
             {
@@ -4547,6 +4544,24 @@ s32 main(s32 argc, const char* argv[])
                     break;
             }
             break;
+        case 0x481D:
+            set_bdvdemu_481dex(payload_mode);
+            switch(payload_mode)
+            {
+                case ZERO_PAYLOAD: //no payload installed
+                    load_payload_481dex(payload_mode);
+                    __asm__("sync");
+                    sleep(1); // maybe need it, maybe not
+
+                    if(!use_cobra && install_mamba)
+                    {
+                        use_mamba = load_ps3_mamba_payload();
+                    }
+                    break;
+                case SKY10_PAYLOAD:
+                    break;
+            }
+            break;			
         case 0x480E:
             set_bdvdemu_480deh(payload_mode);
             switch(payload_mode)
